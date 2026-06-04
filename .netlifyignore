@@ -1,7 +1,11 @@
 .git/
+.github/
 .tools/
 .netlify/
+supabase/
 *.zip
 .env
 .env.*
-!.env.example
+.env.example
+README.md
+vercel.json
