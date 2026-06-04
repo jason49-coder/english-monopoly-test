@@ -23,9 +23,11 @@ SUPABASE_ACCESS_TOKEN=
 SUPABASE_PROJECT_REF=
 SUPABASE_URL=
 SUPABASE_ANON_KEY=
+TEACHER_WRITE_TOKEN=
 ```
 
 Use the Project URL and anon/publishable key from Supabase project settings. Do not put a service role key in browser code.
+`TEACHER_WRITE_TOKEN` is the shared teacher password used by the Netlify Function before it writes course data.
 
 ## Seed the first course
 

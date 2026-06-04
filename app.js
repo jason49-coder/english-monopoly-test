@@ -1,5 +1,6 @@
 const STORAGE_KEY = "english-monopoly-mvp-v1";
 const COURSE_LIBRARY_KEY = "english-monopoly-course-library-v1";
+const TEACHER_WRITE_TOKEN_KEY = "english-monopoly-teacher-write-token-v1";
 const SUPABASE_PUBLIC_CONFIG = {
   url: "https://ybbttuzmwfxwigllfxda.supabase.co",
   anonKey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InliYnR0dXptd2Z4d2lnbGxmeGRhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA1ODgwMzQsImV4cCI6MjA5NjE2NDAzNH0.WtcBOa22ZecFStci2uo7hG1bk0mU6YEbiqAsMtzOyiA",
@@ -97,6 +98,9 @@ let celebrationTimer = null;
 let memoryFeedbackTimer = null;
 let supabaseClient = null;
 let supabaseScriptPromise = null;
+const cloudSave = {
+  saving: false,
+};
 const animation = {
   rolling: false,
   movingTeamId: null,
@@ -1335,6 +1339,7 @@ function getAskPreview() {
 
 function renderCourseLibrary() {
   const courses = loadCourseLibrary();
+  const saving = cloudSave.saving;
 
   return `
     <section class="course-library">
@@ -1343,13 +1348,16 @@ function renderCourseLibrary() {
           <div class="section-kicker">課程庫</div>
           <h3>已儲存課程</h3>
         </div>
-        <button class="success-button" type="button" data-action="save-course">儲存目前課程</button>
+        <div class="course-actions">
+          <button class="ghost-button" type="button" data-action="set-teacher-token" ${saving ? "disabled" : ""}>寫入密碼</button>
+          <button class="success-button" type="button" data-action="save-course" ${saving ? "disabled" : ""}>${saving ? "寫入中" : "儲存到 Supabase"}</button>
+        </div>
       </div>
       ${courses.length ? `
         <div class="course-list">
           ${courses.map((course) => renderSavedCourse(course)).join("")}
         </div>
-      ` : `<div class="empty-state course-empty">還沒有儲存課程，先設定單字後按「儲存目前課程」。</div>`}
+      ` : `<div class="empty-state course-empty">還沒有儲存課程，先設定單字後按「儲存到 Supabase」。</div>`}
     </section>
   `;
 }
@@ -2305,7 +2313,39 @@ function showToast(message) {
   }, 2200);
 }
 
-function saveCurrentCourse() {
+async function saveCurrentCourse() {
+  if (cloudSave.saving) return;
+
+  const lesson = saveCurrentCourseLocally();
+  const token = getTeacherWriteToken() || promptTeacherWriteToken();
+  if (!token) {
+    showToast(`已儲存本機：${lesson.name}`);
+    render();
+    return;
+  }
+
+  cloudSave.saving = true;
+  showToast("正在寫入 Supabase");
+  render();
+
+  try {
+    const result = await saveCourseToCloud(lesson, token);
+    showToast(`已寫入 Supabase：${result.name || lesson.name}`);
+  } catch (error) {
+    console.warn("Unable to save course to Supabase", error);
+    if (error.status === 401) {
+      clearTeacherWriteToken();
+      showToast("寫入密碼錯誤，已清除本次密碼");
+    } else {
+      showToast(error.message || "Supabase 寫入失敗，已保留本機課程");
+    }
+  } finally {
+    cloudSave.saving = false;
+    render();
+  }
+}
+
+function saveCurrentCourseLocally() {
   const now = Date.now();
   const lesson = normalizeLesson(state.lesson);
   lesson.slug = createCourseSlug(lesson.slug || lesson.name);
@@ -2329,7 +2369,65 @@ function saveCurrentCourse() {
   }
 
   saveCourseLibrary(courses.sort((a, b) => b.updatedAt - a.updatedAt));
-  showToast(`已儲存課程：${lesson.name}`);
+  return lesson;
+}
+
+async function saveCourseToCloud(lesson, token) {
+  const response = await fetch("/api/courses", {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ lesson }),
+  });
+  const payload = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    const error = new Error(payload.error || `Supabase 寫入失敗 (${response.status})`);
+    error.status = response.status;
+    throw error;
+  }
+
+  return payload;
+}
+
+function getTeacherWriteToken() {
+  try {
+    return sessionStorage.getItem(TEACHER_WRITE_TOKEN_KEY) || "";
+  } catch (error) {
+    return "";
+  }
+}
+
+function storeTeacherWriteToken(token) {
+  try {
+    sessionStorage.setItem(TEACHER_WRITE_TOKEN_KEY, token);
+  } catch (error) {
+    console.warn("Unable to store teacher write token", error);
+  }
+}
+
+function clearTeacherWriteToken() {
+  try {
+    sessionStorage.removeItem(TEACHER_WRITE_TOKEN_KEY);
+  } catch (error) {
+    console.warn("Unable to clear teacher write token", error);
+  }
+}
+
+function promptTeacherWriteToken() {
+  const token = window.prompt("老師雲端寫入密碼");
+  const normalized = String(token || "").trim();
+  if (normalized) {
+    storeTeacherWriteToken(normalized);
+  }
+  return normalized;
+}
+
+function setTeacherWriteToken() {
+  const token = promptTeacherWriteToken();
+  showToast(token ? "已設定寫入密碼" : "未設定寫入密碼");
   render();
 }
 
@@ -2839,6 +2937,7 @@ document.addEventListener("click", (event) => {
   }
   if (action === "reset-game") resetGame();
   if (action === "load-demo") loadDemo();
+  if (action === "set-teacher-token") setTeacherWriteToken();
   if (action === "save-course") saveCurrentCourse();
   if (action === "load-course") loadSavedCourse(target);
   if (action === "delete-course") deleteSavedCourse(target);
