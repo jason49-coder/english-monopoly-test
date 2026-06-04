@@ -1,5 +1,10 @@
 const STORAGE_KEY = "english-monopoly-mvp-v1";
 const COURSE_LIBRARY_KEY = "english-monopoly-course-library-v1";
+const SUPABASE_PUBLIC_CONFIG = {
+  url: "https://ybbttuzmwfxwigllfxda.supabase.co",
+  anonKey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InliYnR0dXptd2Z4d2lnbGxmeGRhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA1ODgwMzQsImV4cCI6MjA5NjE2NDAzNH0.WtcBOa22ZecFStci2uo7hG1bk0mU6YEbiqAsMtzOyiA",
+};
+const SUPABASE_SCRIPT_SRC = "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2";
 
 const taskLabels = {
   say: "唸單字",
@@ -90,6 +95,8 @@ let state = loadState();
 let toastTimer = null;
 let celebrationTimer = null;
 let memoryFeedbackTimer = null;
+let supabaseClient = null;
+let supabaseScriptPromise = null;
 const animation = {
   rolling: false,
   movingTeamId: null,
@@ -366,6 +373,213 @@ function loadCourseLibrary() {
 
 function saveCourseLibrary(courses) {
   localStorage.setItem(COURSE_LIBRARY_KEY, JSON.stringify(courses));
+}
+
+function getSupabaseConfig() {
+  const override = window.ENGLISH_MONOPOLY_SUPABASE || {};
+  return {
+    url: override.url || SUPABASE_PUBLIC_CONFIG.url,
+    anonKey: override.anonKey || SUPABASE_PUBLIC_CONFIG.anonKey,
+  };
+}
+
+function getSupabaseClient() {
+  if (supabaseClient) return supabaseClient;
+
+  const { url, anonKey } = getSupabaseConfig();
+  if (!url || !anonKey || typeof window.supabase?.createClient !== "function") {
+    return null;
+  }
+
+  supabaseClient = window.supabase.createClient(url, anonKey, {
+    auth: {
+      autoRefreshToken: false,
+      detectSessionInUrl: false,
+      persistSession: false,
+    },
+  });
+  return supabaseClient;
+}
+
+async function getSupabaseClientAsync() {
+  let client = getSupabaseClient();
+  if (client) return client;
+
+  await loadSupabaseScript();
+  client = getSupabaseClient();
+  if (!client) {
+    throw new Error("Supabase SDK loaded, but createClient is unavailable.");
+  }
+  return client;
+}
+
+function loadSupabaseScript() {
+  if (typeof window.supabase?.createClient === "function") {
+    return Promise.resolve();
+  }
+
+  if (supabaseScriptPromise) return supabaseScriptPromise;
+
+  supabaseScriptPromise = new Promise((resolve, reject) => {
+    const script = document.createElement("script");
+    const timeout = setTimeout(() => {
+      script.remove();
+      reject(new Error("Supabase SDK load timed out."));
+    }, 6000);
+
+    script.src = SUPABASE_SCRIPT_SRC;
+    script.async = true;
+    script.onload = () => {
+      clearTimeout(timeout);
+      resolve();
+    };
+    script.onerror = () => {
+      clearTimeout(timeout);
+      reject(new Error("Supabase SDK failed to load."));
+    };
+
+    (document.head || document.body).appendChild(script);
+  });
+
+  return supabaseScriptPromise;
+}
+
+async function syncCloudCourseLibrary() {
+  try {
+    const client = await getSupabaseClientAsync();
+    const cloudCourses = await fetchCloudCourses(client);
+    if (!cloudCourses.length) return;
+
+    saveCourseLibrary(mergeCourseLibraries(loadCourseLibrary(), cloudCourses));
+
+    const course = chooseCloudCourse(cloudCourses);
+    let loadedCourseName = "";
+    if (course && canReplaceActiveLesson()) {
+      setActiveLesson(course.lesson);
+      loadedCourseName = course.lesson.name;
+    }
+
+    if (loadedCourseName) {
+      showToast(`已從雲端載入課程：${loadedCourseName}`);
+    }
+    render();
+  } catch (error) {
+    console.warn("Unable to load Supabase courses; using localStorage fallback.", error);
+  }
+}
+
+async function fetchCloudCourses(client) {
+  const { data: courses, error: coursesError } = await client
+    .from("courses")
+    .select("id, slug, name, tags, patterns, ask_patterns, ask_mode, enabled_tasks, created_at, updated_at")
+    .eq("is_published", true)
+    .order("updated_at", { ascending: false });
+
+  if (coursesError) throw coursesError;
+  if (!Array.isArray(courses) || !courses.length) return [];
+
+  const courseIds = courses.map((course) => course.id).filter(Boolean);
+  const wordsByCourseId = new Map(courseIds.map((courseId) => [courseId, []]));
+
+  if (courseIds.length) {
+    const { data: words, error: wordsError } = await client
+      .from("words")
+      .select("course_id, position, word, meaning, category, sentence, created_at")
+      .in("course_id", courseIds)
+      .order("course_id", { ascending: true })
+      .order("position", { ascending: true })
+      .order("created_at", { ascending: true });
+
+    if (wordsError) throw wordsError;
+    (words || []).forEach((item) => {
+      if (!wordsByCourseId.has(item.course_id)) {
+        wordsByCourseId.set(item.course_id, []);
+      }
+      wordsByCourseId.get(item.course_id).push(normalizeWord(item));
+    });
+  }
+
+  return courses
+    .map((course) => mapCloudCourse(course, wordsByCourseId.get(course.id) || []))
+    .filter(Boolean);
+}
+
+function mapCloudCourse(course, words) {
+  return normalizeSavedCourse({
+    id: course.id,
+    lesson: {
+      name: course.name,
+      slug: course.slug,
+      tags: course.tags || [],
+      patterns: course.patterns || [],
+      askMode: course.ask_mode,
+      askPatterns: course.ask_patterns || [],
+      enabledTasks: course.enabled_tasks || [],
+      words,
+    },
+    createdAt: Date.parse(course.created_at),
+    updatedAt: Date.parse(course.updated_at),
+  });
+}
+
+function mergeCourseLibraries(localCourses, cloudCourses) {
+  const merged = [...localCourses];
+
+  cloudCourses.forEach((cloudCourse) => {
+    const cloudSlug = createCourseSlug(cloudCourse.lesson.slug || cloudCourse.lesson.name);
+    const existingIndex = merged.findIndex((course) => (
+      createCourseSlug(course.lesson?.slug || course.lesson?.name) === cloudSlug
+    ));
+
+    if (existingIndex >= 0) {
+      merged[existingIndex] = cloudCourse;
+    } else {
+      merged.unshift(cloudCourse);
+    }
+  });
+
+  return merged.sort((a, b) => b.updatedAt - a.updatedAt);
+}
+
+function chooseCloudCourse(cloudCourses) {
+  const requestedSlug = getRequestedCourseSlug();
+  const currentSlug = createCourseSlug(state.lesson?.slug || state.lesson?.name);
+  const defaultSlug = createCourseSlug(defaultLesson.slug);
+
+  if (requestedSlug) {
+    const requestedCourse = cloudCourses.find((course) => (
+      createCourseSlug(course.lesson.slug || course.lesson.name) === requestedSlug
+    ));
+    if (requestedCourse) return requestedCourse;
+  }
+
+  const matchingCourse = cloudCourses.find((course) => (
+    createCourseSlug(course.lesson.slug || course.lesson.name) === currentSlug
+  ));
+  if (matchingCourse) return matchingCourse;
+
+  return currentSlug === defaultSlug ? cloudCourses[0] : null;
+}
+
+function getRequestedCourseSlug() {
+  const params = new URLSearchParams(window.location.search);
+  const value = params.get("course") || params.get("lesson") || params.get("slug");
+  return value ? createCourseSlug(value) : "";
+}
+
+function canReplaceActiveLesson() {
+  return !isBusy() && !state.game?.started && !state.memory?.started;
+}
+
+function setActiveLesson(lesson) {
+  state.lesson = normalizeLesson(lesson);
+  state.game = freshGameState({
+    teams: state.game?.teams?.length ? state.game.teams : defaultTeams,
+    wordCount: state.lesson.words.length,
+    enabledTasks: state.lesson.enabledTasks,
+  });
+  state.memory = freshMemoryState({ teams: state.game.teams });
+  state.activeGame = "hub";
 }
 
 function normalizeSavedCourse(course) {
@@ -2679,3 +2893,4 @@ window.addEventListener("resize", () => {
 });
 
 render();
+syncCloudCourseLibrary();
