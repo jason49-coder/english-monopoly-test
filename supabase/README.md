@@ -19,8 +19,19 @@ The schema enables Row Level Security. Public browser clients can read only publ
 After creating a Supabase project, add these values to the local `.env` file:
 
 ```env
+SUPABASE_ACCESS_TOKEN=
+SUPABASE_PROJECT_REF=
 SUPABASE_URL=
 SUPABASE_ANON_KEY=
 ```
 
 Use the Project URL and anon/publishable key from Supabase project settings. Do not put a service role key in browser code.
+
+## Seed the first course
+
+Run `supabase/seed.sql` after `supabase/schema.sql` to create the starter course:
+
+- `Unit 1 Animals and Food`
+- 8 vocabulary words
+
+The seed is safe to rerun. It upserts the course by slug and refreshes that course's word list.
