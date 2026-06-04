@@ -2,3 +2,6 @@
 .tools/
 .netlify/
 *.zip
+.env
+.env.*
+!.env.example
