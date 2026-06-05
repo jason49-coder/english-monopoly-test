@@ -2,6 +2,7 @@ const MAX_WORDS = 500;
 const MAX_TEXT_LENGTH = 1000;
 const VALID_TASKS = new Set(["say", "sentence", "spell", "ask", "act", "choose"]);
 const VALID_ASK_MODES = new Set(["auto", "template", "student"]);
+const WRITE_ENV_KEYS = ["TEACHER_WRITE_TOKEN", "SUPABASE_ACCESS_TOKEN", "SUPABASE_PROJECT_REF"] as const;
 
 export default async (req: Request) => {
   if (req.method === "OPTIONS") {
@@ -16,8 +17,18 @@ export default async (req: Request) => {
   const accessToken = getEnv("SUPABASE_ACCESS_TOKEN");
   const projectRef = getEnv("SUPABASE_PROJECT_REF");
 
-  if (!expectedToken || !accessToken || !projectRef) {
-    return jsonResponse({ error: "Supabase write environment is not configured." }, 500);
+  const envValues = {
+    TEACHER_WRITE_TOKEN: expectedToken,
+    SUPABASE_ACCESS_TOKEN: accessToken,
+    SUPABASE_PROJECT_REF: projectRef,
+  };
+  const missingEnv = WRITE_ENV_KEYS.filter((name) => !envValues[name]);
+
+  if (missingEnv.length) {
+    return jsonResponse({
+      error: "Supabase write environment is not configured.",
+      missing: missingEnv,
+    }, 500);
   }
 
   const token = readBearerToken(req.headers.get("Authorization")) || req.headers.get("x-teacher-token") || "";
