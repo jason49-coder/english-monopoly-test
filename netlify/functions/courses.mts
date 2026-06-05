@@ -4,6 +4,9 @@ const VALID_TASKS = new Set(["say", "sentence", "spell", "ask", "act", "choose"]
 const VALID_ASK_MODES = new Set(["auto", "template", "student"]);
 const WRITE_ENV_KEYS = ["TEACHER_WRITE_TOKEN", "SUPABASE_ACCESS_TOKEN", "SUPABASE_PROJECT_REF"] as const;
 
+declare const Netlify: { env?: { get?: (name: string) => string | undefined } } | undefined;
+declare const process: { env?: Record<string, string | undefined> } | undefined;
+
 export default async (req: Request) => {
   if (req.method === "OPTIONS") {
     return jsonResponse({}, 204);
@@ -71,8 +74,19 @@ export const config = {
 };
 
 function getEnv(name: string) {
-  const netlifyEnv = globalThis.Netlify?.env?.get?.(name);
-  return netlifyEnv || globalThis.process?.env?.[name] || "";
+  const globals = globalThis as typeof globalThis & {
+    Netlify?: { env?: { get?: (key: string) => string | undefined } };
+    process?: { env?: Record<string, string | undefined> };
+  };
+
+  const netlifyEnv = typeof Netlify !== "undefined" ? Netlify?.env?.get?.(name) : "";
+  const processEnv = typeof process !== "undefined" ? process?.env?.[name] : "";
+
+  return netlifyEnv
+    || processEnv
+    || globals.Netlify?.env?.get?.(name)
+    || globals.process?.env?.[name]
+    || "";
 }
 
 function readBearerToken(value: string | null) {
