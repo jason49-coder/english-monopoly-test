@@ -28,10 +28,10 @@
 
 ## Supabase 寫入設定
 
-老師後台的「儲存到 Supabase」會呼叫 `/api/courses`。Netlify production site 需要設定這些環境變數：
+老師後台的「儲存到 Supabase」會用 Supabase anon key 呼叫 REST API，並在 request header 帶上老師寫入密碼。資料庫 RLS 會比對 `TEACHER_WRITE_TOKEN` 的 SHA-256 hash，只有密碼正確時才允許新增、更新或刪除 `courses` / `words`。
 
-- `SUPABASE_ACCESS_TOKEN`
-- `SUPABASE_PROJECT_REF`
-- `TEACHER_WRITE_TOKEN`
+若要更換老師寫入密碼：
 
-`TEACHER_WRITE_TOKEN` 是老師端寫入密碼。瀏覽器不會持有 Supabase 管理權限 token；高權限寫入只在 Netlify Function 內執行。
+1. 更新本機 `.env` 的 `TEACHER_WRITE_TOKEN`。
+2. 將新 token 的 SHA-256 hash 更新到 `supabase/schema.sql` 的 `public.teacher_write_allowed()`。
+3. 在 Supabase SQL Editor 重新執行 teacher write policy 區塊。

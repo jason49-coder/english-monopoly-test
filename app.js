@@ -2373,18 +2373,100 @@ function saveCurrentCourseLocally() {
 }
 
 async function saveCourseToCloud(lesson, token) {
-  const response = await fetch("/api/courses", {
+  if (!lesson.words.length) {
+    throw new Error("請至少新增一個單字再寫入 Supabase");
+  }
+
+  const course = await upsertSupabaseCourse(lesson, token);
+  await replaceSupabaseWords(course.id, lesson.words, token);
+
+  return {
+    id: course.id,
+    slug: course.slug || lesson.slug,
+    name: course.name || lesson.name,
+    wordCount: lesson.words.length,
+  };
+}
+
+async function upsertSupabaseCourse(lesson, token) {
+  const response = await fetchSupabaseRest("courses?on_conflict=slug&select=id,slug,name", token, {
     method: "POST",
     headers: {
-      "Authorization": `Bearer ${token}`,
       "Content-Type": "application/json",
+      "Prefer": "resolution=merge-duplicates,return=representation",
     },
-    body: JSON.stringify({ lesson }),
+    body: JSON.stringify([{
+      slug: lesson.slug,
+      name: lesson.name,
+      tags: lesson.tags || [],
+      patterns: lesson.patterns || [],
+      ask_patterns: lesson.askPatterns || [],
+      ask_mode: lesson.askMode || "auto",
+      enabled_tasks: lesson.enabledTasks || [],
+      is_published: true,
+    }]),
   });
-  const payload = await response.json().catch(() => ({}));
+  const payload = await parseSupabaseResponse(response);
+  const course = Array.isArray(payload) ? payload[0] : null;
+  if (!course?.id) {
+    throw new Error("Supabase 沒有回傳課程 ID");
+  }
+
+  return course;
+}
+
+async function replaceSupabaseWords(courseId, words, token) {
+  const deleteResponse = await fetchSupabaseRest(`words?course_id=eq.${encodeURIComponent(courseId)}`, token, {
+    method: "DELETE",
+  });
+  await parseSupabaseResponse(deleteResponse);
+
+  if (!words.length) return;
+
+  const response = await fetchSupabaseRest("words", token, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Prefer": "return=minimal",
+    },
+    body: JSON.stringify(words.map((item, index) => ({
+      course_id: courseId,
+      position: index,
+      word: item.word,
+      meaning: item.meaning || "",
+      category: item.category || "",
+      sentence: item.sentence || "",
+    }))),
+  });
+  await parseSupabaseResponse(response);
+}
+
+async function fetchSupabaseRest(path, token, options = {}) {
+  const { url, anonKey } = getSupabaseConfig();
+  if (!url || !anonKey) {
+    throw new Error("Supabase 前端設定不完整");
+  }
+
+  const headers = {
+    "apikey": anonKey,
+    "Authorization": `Bearer ${anonKey}`,
+    "x-teacher-token": token,
+    ...(options.headers || {}),
+  };
+
+  return fetch(`${url}/rest/v1/${path}`, {
+    ...options,
+    headers,
+  });
+}
+
+async function parseSupabaseResponse(response) {
+  const text = await response.text();
+  const payload = text ? JSON.parse(text) : null;
 
   if (!response.ok) {
-    const error = new Error(payload.error || `Supabase 寫入失敗 (${response.status})`);
+    const message = payload?.message || payload?.error || `Supabase 寫入失敗 (${response.status})`;
+    const error = new Error(message);
     error.status = response.status;
     throw error;
   }

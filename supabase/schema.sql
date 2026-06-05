@@ -63,8 +63,29 @@ alter table public.words enable row level security;
 grant usage on schema public to anon, authenticated;
 grant select on public.courses to anon, authenticated;
 grant select on public.words to anon, authenticated;
+grant insert, update, delete on public.courses to anon, authenticated;
+grant insert, update, delete on public.words to anon, authenticated;
 grant all on public.courses to service_role;
 grant all on public.words to service_role;
+
+create or replace function public.teacher_write_allowed()
+returns boolean
+language sql
+stable
+as $$
+  select encode(
+    digest(
+      coalesce(
+        nullif(current_setting('request.headers', true), '')::jsonb ->> 'x-teacher-token',
+        ''
+      ),
+      'sha256'
+    ),
+    'hex'
+  ) = '8372aaf6c6bf0e0e231ecc4e43015f7d57d3fc6eefaf44719527af5dd79bc0cd';
+$$;
+
+grant execute on function public.teacher_write_allowed() to anon, authenticated;
 
 drop policy if exists "Public can read published courses" on public.courses;
 create policy "Public can read published courses"
@@ -86,3 +107,47 @@ using (
       and courses.is_published = true
   )
 );
+
+drop policy if exists "Teachers can insert courses" on public.courses;
+create policy "Teachers can insert courses"
+on public.courses
+for insert
+to anon, authenticated
+with check (public.teacher_write_allowed());
+
+drop policy if exists "Teachers can update courses" on public.courses;
+create policy "Teachers can update courses"
+on public.courses
+for update
+to anon, authenticated
+using (public.teacher_write_allowed())
+with check (public.teacher_write_allowed());
+
+drop policy if exists "Teachers can delete courses" on public.courses;
+create policy "Teachers can delete courses"
+on public.courses
+for delete
+to anon, authenticated
+using (public.teacher_write_allowed());
+
+drop policy if exists "Teachers can insert words" on public.words;
+create policy "Teachers can insert words"
+on public.words
+for insert
+to anon, authenticated
+with check (public.teacher_write_allowed());
+
+drop policy if exists "Teachers can update words" on public.words;
+create policy "Teachers can update words"
+on public.words
+for update
+to anon, authenticated
+using (public.teacher_write_allowed())
+with check (public.teacher_write_allowed());
+
+drop policy if exists "Teachers can delete words" on public.words;
+create policy "Teachers can delete words"
+on public.words
+for delete
+to anon, authenticated
+using (public.teacher_write_allowed());
