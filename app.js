@@ -104,6 +104,10 @@ const cloudSave = {
   tokenStatus: "empty",
   tokenMessage: "",
 };
+const courseDelete = {
+  pendingCourseId: "",
+  deletingCourseId: "",
+};
 const animation = {
   rolling: false,
   movingTeamId: null,
@@ -145,6 +149,7 @@ function loadState() {
     chromeCollapsed: true,
     activeGame: "hub",
     lesson: structuredClone(defaultLesson),
+    courseEditor: freshCourseEditorState("new"),
     game: freshGameState(),
     memory: null,
     toast: "",
@@ -286,6 +291,7 @@ function clamp(value, min, max) {
 
 function ensureGameShape() {
   state.lesson = normalizeLesson(state.lesson || defaultLesson);
+  ensureCourseEditorShape();
 
   if (!["hub", "monopoly", "memory"].includes(state.activeGame)) {
     state.activeGame = "hub";
@@ -357,6 +363,7 @@ function saveState() {
     chromeCollapsed: state.chromeCollapsed,
     activeGame: state.activeGame,
     lesson: state.lesson,
+    courseEditor: state.courseEditor,
     game: state.game,
     memory: state.memory,
   }));
@@ -463,6 +470,7 @@ async function syncCloudCourseLibrary() {
     let loadedCourseName = "";
     if (course && canReplaceActiveLesson()) {
       setActiveLesson(course.lesson);
+      setCourseEditorCourse(course);
       loadedCourseName = course.lesson.name;
     }
 
@@ -589,6 +597,110 @@ function setActiveLesson(lesson) {
   state.activeGame = "hub";
 }
 
+function freshCourseEditorState(mode = "new", course = null) {
+  const lesson = course?.lesson ? normalizeLesson(course.lesson) : null;
+  return {
+    mode: mode === "existing" ? "existing" : "new",
+    selectedCourseId: course?.id || "",
+    lockedSlug: lesson ? createCourseSlug(lesson.slug || lesson.name) : "",
+  };
+}
+
+function ensureCourseEditorShape() {
+  const courses = loadCourseLibrary();
+  const editor = state.courseEditor && typeof state.courseEditor === "object"
+    ? state.courseEditor
+    : freshCourseEditorState("new");
+  const mode = editor.mode === "existing" ? "existing" : editor.mode === "new" ? "new" : "";
+  const activeSlug = createCourseSlug(state.lesson?.slug || state.lesson?.name);
+  const selectedCourse = findCourseByIdentity(editor.selectedCourseId, editor.lockedSlug)
+    || (!mode ? findCourseBySlug(activeSlug, courses) : null);
+
+  if (mode === "existing" && selectedCourse) {
+    state.courseEditor = freshCourseEditorState("existing", selectedCourse);
+    state.lesson.slug = state.courseEditor.lockedSlug;
+    return;
+  }
+
+  if (!mode && selectedCourse) {
+    state.courseEditor = freshCourseEditorState("existing", selectedCourse);
+    state.lesson.slug = state.courseEditor.lockedSlug;
+    return;
+  }
+
+  state.courseEditor = freshCourseEditorState("new");
+}
+
+function setCourseEditorCourse(course) {
+  state.courseEditor = freshCourseEditorState("existing", course);
+  if (state.courseEditor.lockedSlug) {
+    state.lesson.slug = state.courseEditor.lockedSlug;
+  }
+}
+
+function setCourseEditorForLesson(lesson, preferredCourse = null) {
+  const course = preferredCourse || findCourseBySlug(lesson?.slug || lesson?.name);
+  state.courseEditor = course ? freshCourseEditorState("existing", course) : freshCourseEditorState("new");
+  if (course) {
+    state.lesson.slug = state.courseEditor.lockedSlug;
+  }
+}
+
+function getSelectedCourse() {
+  const editor = state.courseEditor || {};
+  return findCourseByIdentity(editor.selectedCourseId, editor.lockedSlug);
+}
+
+function findCourseByIdentity(courseId, slug, courses = loadCourseLibrary()) {
+  if (courseId) {
+    const byId = courses.find((course) => course.id === courseId);
+    if (byId) return byId;
+  }
+  return slug ? findCourseBySlug(slug, courses) : null;
+}
+
+function findCourseBySlug(slug, courses = loadCourseLibrary()) {
+  if (!String(slug || "").trim()) return null;
+  const normalizedSlug = createCourseSlug(slug);
+  return courses.find((course) => (
+    createCourseSlug(course.lesson?.slug || course.lesson?.name) === normalizedSlug
+  )) || null;
+}
+
+function isEditingExistingCourse() {
+  return state.courseEditor?.mode === "existing" && Boolean(getSelectedCourse());
+}
+
+function createBlankLesson() {
+  return {
+    name: "新課程",
+    slug: createUniqueCourseSlug("new-course"),
+    tags: [],
+    patterns: ["I see a ___ ."],
+    askMode: "auto",
+    askPatterns: [...defaultLesson.askPatterns],
+    enabledTasks: [...defaultLesson.enabledTasks],
+    words: [],
+  };
+}
+
+function createUniqueCourseSlug(baseSlug, ignoreCourseId = "") {
+  const courses = loadCourseLibrary();
+  const base = createCourseSlug(baseSlug || "new-course");
+  let slug = base;
+  let suffix = 2;
+
+  while (courses.some((course) => (
+    course.id !== ignoreCourseId
+    && createCourseSlug(course.lesson?.slug || course.lesson?.name) === slug
+  ))) {
+    slug = `${base}-${suffix}`;
+    suffix += 1;
+  }
+
+  return slug;
+}
+
 function normalizeSavedCourse(course) {
   if (!course) return null;
   const lesson = normalizeLesson(course.lesson || course);
@@ -689,10 +801,22 @@ function applyRouteView() {
 }
 
 function getGamePageUrl() {
-  if (state.view === "teacher" && window.location.pathname.toLowerCase().includes("/teacher")) {
-    return new URL("../index.html", window.location.href).href;
+  const slug = createCourseSlug(state.lesson?.slug || state.lesson?.name);
+  const url = state.view === "teacher" && window.location.pathname.toLowerCase().includes("/teacher")
+    ? new URL("../index.html", window.location.href)
+    : new URL("index.html", window.location.href);
+  if (slug) {
+    url.searchParams.set("course", slug);
   }
-  return new URL("index.html", window.location.href).href;
+  return url.href;
+}
+
+function getCourseGamePageUrl(slug) {
+  const url = window.location.pathname.toLowerCase().includes("/teacher")
+    ? new URL("../index.html", window.location.href)
+    : new URL("index.html", window.location.href);
+  url.searchParams.set("course", createCourseSlug(slug));
+  return url.href;
 }
 
 function getTeacherPageUrl() {
@@ -1253,6 +1377,7 @@ function renderTeamRow(team, index) {
 
 function renderTeacher() {
   const busy = isBusy();
+  const slugLocked = isEditingExistingCourse();
   return `
     <section class="teacher-layout">
       <aside class="teacher-panel">
@@ -1263,14 +1388,15 @@ function renderTeacher() {
           </div>
           <button class="primary-button" data-action="go-game-url" ${busy ? "disabled" : ""}>前往遊戲入口</button>
         </div>
+        ${renderCourseEditorPanel()}
         <div class="form-grid">
           <div class="field">
             <label for="lessonName">課程名稱</label>
             <input id="lessonName" value="${escapeAttr(state.lesson.name)}" data-action="edit-lesson" data-field="name" />
           </div>
           <div class="field">
-            <label for="lessonSlug">課程網址代碼</label>
-            <input id="lessonSlug" value="${escapeAttr(state.lesson.slug || "")}" data-action="edit-lesson" data-field="slug" placeholder="unit-1-animals-food" />
+            <label for="lessonSlug">課程網址代碼${slugLocked ? "（已鎖定）" : ""}</label>
+            <input id="lessonSlug" value="${escapeAttr(state.lesson.slug || "")}" data-action="edit-lesson" data-field="slug" placeholder="unit-1-animals-food" ${slugLocked ? "readonly" : ""} />
           </div>
           <div class="field">
             <label for="lessonTags">課程標籤，用逗號分隔</label>
@@ -1309,6 +1435,43 @@ function renderTeacher() {
           </div>
         </div>
       </section>
+    </section>
+  `;
+}
+
+function renderCourseEditorPanel() {
+  const courses = loadCourseLibrary();
+  const selectedCourse = getSelectedCourse();
+  const isExisting = isEditingExistingCourse();
+  const modeLabel = isExisting ? "更新既有課程" : "建立新課程";
+  const activeSlug = createCourseSlug(state.lesson.slug || state.lesson.name);
+
+  return `
+    <section class="course-editor-panel">
+      <div class="course-editor-head">
+        <div>
+          <div class="section-kicker">課程工作區</div>
+          <h3>${escapeHtml(state.lesson.name || "新課程")}</h3>
+          <span>${escapeHtml(activeSlug)} · ${state.lesson.words.length} 個單字</span>
+        </div>
+        <span class="course-mode-pill ${isExisting ? "is-existing" : "is-new"}">${modeLabel}</span>
+      </div>
+      <div class="course-picker-row">
+        <label class="small-label" for="coursePicker">先選課程</label>
+        <select id="coursePicker" data-action="select-course" ${courses.length ? "" : "disabled"}>
+          <option value="">${courses.length ? "選擇要編輯的課程" : "目前沒有已儲存課程"}</option>
+          ${courses.map((course) => `
+            <option value="${escapeAttr(course.id)}" ${selectedCourse?.id === course.id ? "selected" : ""}>
+              ${escapeHtml(course.lesson.name)} · ${escapeHtml(course.lesson.slug || "my-course")}
+            </option>
+          `).join("")}
+        </select>
+      </div>
+      <div class="course-editor-actions">
+        <button class="ghost-button" type="button" data-action="start-new-course">建立新課程</button>
+        <button class="ghost-button" type="button" data-action="duplicate-course">另存為新課程</button>
+        <button class="ghost-button" type="button" data-action="copy-current-course-link" ${activeSlug ? "" : "disabled"}>複製前台連結</button>
+      </div>
     </section>
   `;
 }
@@ -1382,6 +1545,7 @@ function renderCloudWritePanel() {
   const disabled = saving || verifying;
   const status = getTeacherWriteTokenStatus();
   const placeholder = token ? "本分頁已記住密碼" : "輸入老師寫入密碼";
+  const saveLabel = getCloudSaveButtonLabel();
 
   return `
     <div class="cloud-write-panel">
@@ -1394,9 +1558,13 @@ function renderCloudWritePanel() {
         <button class="ghost-button" type="button" data-action="verify-teacher-token" ${disabled || !token ? "disabled" : ""}>${verifying ? "驗證中" : "驗證"}</button>
         <button class="plain-button" type="button" data-action="clear-teacher-token" ${disabled || !token ? "disabled" : ""}>清除</button>
       </div>
-      <button class="success-button cloud-save-button" type="button" data-action="save-course" ${disabled ? "disabled" : ""}>${saving ? "寫入中" : "儲存到 Supabase"}</button>
+      <button class="success-button cloud-save-button" type="button" data-action="save-course" ${disabled ? "disabled" : ""}>${saving ? "寫入中" : saveLabel}</button>
     </div>
   `;
+}
+
+function getCloudSaveButtonLabel() {
+  return isEditingExistingCourse() ? "更新這門課程到 Supabase" : "建立新課程到 Supabase";
 }
 
 function getTeacherWriteTokenStatus() {
@@ -1438,16 +1606,26 @@ function getTeacherWriteTokenStatus() {
 
 function renderSavedCourse(course) {
   const lesson = course.lesson;
+  const selected = getSelectedCourse()?.id === course.id;
+  const pendingDelete = courseDelete.pendingCourseId === course.id;
+  const deleting = courseDelete.deletingCourseId === course.id;
   return `
-    <article class="course-item">
+    <article class="course-item ${selected ? "is-selected" : ""} ${pendingDelete ? "is-delete-pending" : ""}">
       <div class="course-info">
         <strong>${escapeHtml(lesson.name)}</strong>
         <span>${lesson.words.length} 個單字 · ${lesson.patterns.length} 參考句型 · ${formatSavedAt(course.updatedAt)}</span>
         <span>${escapeHtml(lesson.slug || "my-course")} ${lesson.tags?.length ? `· ${lesson.tags.map((tag) => `#${escapeHtml(tag)}`).join(" ")}` : ""}</span>
+        ${pendingDelete ? `<span class="course-delete-warning">將刪除雲端課程與全部單字</span>` : ""}
       </div>
       <div class="course-actions">
-        <button class="ghost-button" type="button" data-action="load-course" data-course-id="${escapeAttr(course.id)}">載入</button>
-        <button class="mini-button" type="button" data-action="delete-course" data-course-id="${escapeAttr(course.id)}">刪除</button>
+        <button class="ghost-button" type="button" data-action="copy-course-link" data-course-slug="${escapeAttr(lesson.slug || lesson.name)}">前台連結</button>
+        <button class="ghost-button" type="button" data-action="load-course" data-course-id="${escapeAttr(course.id)}">${selected ? "編輯中" : "載入"}</button>
+        ${pendingDelete ? `
+          <button class="ghost-button" type="button" data-action="cancel-delete-course" data-course-id="${escapeAttr(course.id)}" ${deleting ? "disabled" : ""}>取消</button>
+          <button class="mini-button is-danger" type="button" data-action="confirm-delete-course" data-course-id="${escapeAttr(course.id)}" ${deleting ? "disabled" : ""}>${deleting ? "刪除中" : "確認刪除"}</button>
+        ` : `
+          <button class="mini-button" type="button" data-action="request-delete-course" data-course-id="${escapeAttr(course.id)}">刪除</button>
+        `}
       </div>
     </article>
   `;
@@ -2390,7 +2568,14 @@ function showToast(message) {
 async function saveCurrentCourse() {
   if (cloudSave.saving) return;
 
-  const lesson = saveCurrentCourseLocally();
+  const prepared = prepareCourseForSave();
+  if (!prepared.ok) {
+    showToast(prepared.message);
+    render();
+    return;
+  }
+
+  const lesson = saveCurrentCourseLocally(prepared);
   const token = getTeacherWriteToken();
   if (!token) {
     cloudSave.tokenStatus = "empty";
@@ -2409,7 +2594,8 @@ async function saveCurrentCourse() {
       throw createTeacherTokenError();
     }
 
-    const result = await saveCourseToCloud(lesson, token);
+    const result = await saveCourseToCloud(lesson, token, prepared);
+    updateSavedCourseAfterCloudSave(result, lesson);
     cloudSave.tokenStatus = "saved";
     cloudSave.tokenMessage = `已成功寫入：${result.name || lesson.name}`;
     showToast(`已寫入 Supabase：${result.name || lesson.name}`);
@@ -2431,39 +2617,86 @@ async function saveCurrentCourse() {
   }
 }
 
-function saveCurrentCourseLocally() {
-  const now = Date.now();
+function prepareCourseForSave() {
   const lesson = normalizeLesson(state.lesson);
+  const courses = loadCourseLibrary();
+  const selectedCourse = getSelectedCourse();
+
+  if (isEditingExistingCourse()) {
+    const lockedSlug = createCourseSlug(state.courseEditor.lockedSlug || selectedCourse.lesson.slug || lesson.slug);
+    lesson.slug = lockedSlug;
+    state.lesson = lesson;
+    return {
+      ok: true,
+      mode: "existing",
+      lesson,
+      selectedCourse,
+      lockedSlug,
+    };
+  }
+
+  lesson.slug = createCourseSlug(lesson.slug || lesson.name);
+  const collision = courses.find((course) => (
+    createCourseSlug(course.lesson?.slug || course.lesson?.name) === lesson.slug
+  ));
+
+  if (collision) {
+    return {
+      ok: false,
+      message: `網址代碼已屬於「${collision.lesson.name}」，請先載入該課程或改用其他代碼。`,
+    };
+  }
+
+  state.lesson = lesson;
+  return {
+    ok: true,
+    mode: "new",
+    lesson,
+    selectedCourse: null,
+    lockedSlug: lesson.slug,
+  };
+}
+
+function saveCurrentCourseLocally(prepared = {}) {
+  const now = Date.now();
+  const lesson = normalizeLesson(prepared.lesson || state.lesson);
   lesson.slug = createCourseSlug(lesson.slug || lesson.name);
   const courses = loadCourseLibrary();
   const lessonKey = lesson.slug;
-  const existingIndex = courses.findIndex((course) => createCourseSlug(course.lesson?.slug || course.lesson?.name) === lessonKey);
+  const existingIndex = prepared.mode === "existing" && prepared.selectedCourse
+    ? courses.findIndex((course) => course.id === prepared.selectedCourse.id)
+    : courses.findIndex((course) => createCourseSlug(course.lesson?.slug || course.lesson?.name) === lessonKey);
+  let savedCourse = null;
 
   if (existingIndex >= 0) {
-    courses[existingIndex] = {
+    savedCourse = {
       ...courses[existingIndex],
       lesson,
       updatedAt: now,
     };
+    courses[existingIndex] = savedCourse;
   } else {
-    courses.unshift({
+    savedCourse = {
       id: createCourseId(),
       lesson,
       createdAt: now,
       updatedAt: now,
-    });
+    };
+    courses.unshift(savedCourse);
   }
 
   saveCourseLibrary(courses.sort((a, b) => b.updatedAt - a.updatedAt));
+  state.lesson = lesson;
+  setCourseEditorCourse(savedCourse);
   return lesson;
 }
 
-async function saveCourseToCloud(lesson, token) {
+async function saveCourseToCloud(lesson, token, saveContext = {}) {
   if (!lesson.words.length) {
     throw new Error("請至少新增一個單字再寫入 Supabase");
   }
 
-  const course = await upsertSupabaseCourse(lesson, token);
+  const course = await saveSupabaseCourse(lesson, token, saveContext);
   await replaceSupabaseWords(course.id, lesson.words, token);
 
   return {
@@ -2474,31 +2707,101 @@ async function saveCourseToCloud(lesson, token) {
   };
 }
 
-async function upsertSupabaseCourse(lesson, token) {
-  const response = await fetchSupabaseRest("courses?on_conflict=slug&select=id,slug,name", token, {
+async function saveSupabaseCourse(lesson, token, saveContext = {}) {
+  const selectedId = saveContext.selectedCourse?.id || "";
+  if (saveContext.mode === "existing" && isUuid(selectedId)) {
+    return updateSupabaseCourse(selectedId, lesson, token);
+  }
+  return insertSupabaseCourse(lesson, token);
+}
+
+function updateSavedCourseAfterCloudSave(result, lesson) {
+  if (!result?.id) return;
+
+  const courses = loadCourseLibrary();
+  const lessonSlug = createCourseSlug(result.slug || lesson.slug);
+  const index = courses.findIndex((course) => (
+    createCourseSlug(course.lesson?.slug || course.lesson?.name) === lessonSlug
+  ));
+
+  if (index < 0) return;
+
+  const savedCourse = {
+    ...courses[index],
+    id: result.id,
+    lesson: {
+      ...courses[index].lesson,
+      slug: result.slug || lesson.slug,
+      name: result.name || lesson.name,
+    },
+  };
+  courses[index] = savedCourse;
+  saveCourseLibrary(courses.sort((a, b) => b.updatedAt - a.updatedAt));
+  setCourseEditorCourse(savedCourse);
+}
+
+async function insertSupabaseCourse(lesson, token) {
+  const response = await fetchSupabaseRest("courses?select=id,slug,name", token, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "Prefer": "resolution=merge-duplicates,return=representation",
+      "Prefer": "return=representation",
     },
-    body: JSON.stringify([{
-      slug: lesson.slug,
-      name: lesson.name,
-      tags: lesson.tags || [],
-      patterns: lesson.patterns || [],
-      ask_patterns: lesson.askPatterns || [],
-      ask_mode: lesson.askMode || "auto",
-      enabled_tasks: lesson.enabledTasks || [],
-      is_published: true,
-    }]),
+    body: JSON.stringify([getSupabaseCoursePayload(lesson)]),
   });
-  const payload = await parseSupabaseResponse(response);
+  const payload = await parseSupabaseCourseResponse(response);
   const course = Array.isArray(payload) ? payload[0] : null;
   if (!course?.id) {
     throw new Error("Supabase 沒有回傳課程 ID");
   }
 
   return course;
+}
+
+async function updateSupabaseCourse(courseId, lesson, token) {
+  const response = await fetchSupabaseRest(`courses?id=eq.${encodeURIComponent(courseId)}&select=id,slug,name`, token, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      "Prefer": "return=representation",
+    },
+    body: JSON.stringify(getSupabaseCoursePayload(lesson)),
+  });
+  const payload = await parseSupabaseCourseResponse(response);
+  const course = Array.isArray(payload) ? payload[0] : null;
+  if (!course?.id) {
+    throw new Error("Supabase 沒有回傳課程 ID");
+  }
+
+  return course;
+}
+
+function getSupabaseCoursePayload(lesson) {
+  return {
+    slug: lesson.slug,
+    name: lesson.name,
+    tags: lesson.tags || [],
+    patterns: lesson.patterns || [],
+    ask_patterns: lesson.askPatterns || [],
+    ask_mode: lesson.askMode || "auto",
+    enabled_tasks: lesson.enabledTasks || [],
+    is_published: true,
+  };
+}
+
+async function parseSupabaseCourseResponse(response) {
+  try {
+    return await parseSupabaseResponse(response);
+  } catch (error) {
+    if (error.status === 409) {
+      throw new Error("雲端已有相同網址代碼，請先載入該課程或改用其他代碼。");
+    }
+    throw error;
+  }
+}
+
+function isUuid(value) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(value || ""));
 }
 
 async function replaceSupabaseWords(courseId, words, token) {
@@ -2688,33 +2991,160 @@ function clearTeacherTokenInput() {
 }
 
 function loadSavedCourse(target) {
-  const course = loadCourseLibrary().find((item) => item.id === target.dataset.courseId);
+  loadCourseById(target.dataset.courseId);
+}
+
+function selectCourseFromPicker(target) {
+  if (!target.value) return;
+  loadCourseById(target.value);
+}
+
+function loadCourseById(courseId) {
+  const course = loadCourseLibrary().find((item) => item.id === courseId);
   if (!course) {
     showToast("找不到這份課程");
     render();
     return;
   }
 
-  state.lesson = structuredClone(course.lesson);
-  state.game = freshGameState({
-    teams: state.game.teams,
-    wordCount: state.lesson.words.length,
-    enabledTasks: state.game.enabledTasks || state.lesson.enabledTasks,
-  });
-  state.memory = freshMemoryState({ teams: state.game.teams });
-  state.activeGame = "hub";
+  setActiveLesson(course.lesson);
+  setCourseEditorCourse(course);
   state.view = "teacher";
   showToast(`已載入課程：${state.lesson.name}`);
   render();
 }
 
-function deleteSavedCourse(target) {
+function startNewCourse() {
+  setActiveLesson(createBlankLesson());
+  state.courseEditor = freshCourseEditorState("new");
+  state.view = "teacher";
+  state.chromeCollapsed = false;
+  showToast("已開啟新課程");
+  render();
+}
+
+function duplicateCurrentCourse() {
+  const lesson = normalizeLesson(state.lesson);
+  const baseSlug = createCourseSlug(`${lesson.slug || lesson.name}-copy`);
+  lesson.name = `${lesson.name} 副本`;
+  lesson.slug = createUniqueCourseSlug(baseSlug);
+  setActiveLesson(lesson);
+  state.courseEditor = freshCourseEditorState("new");
+  state.view = "teacher";
+  state.chromeCollapsed = false;
+  showToast("已另存為新課程草稿");
+  render();
+}
+
+async function copyCurrentCourseLink() {
+  await copyCourseLinkBySlug(state.lesson.slug || state.lesson.name);
+}
+
+async function copySavedCourseLink(target) {
+  await copyCourseLinkBySlug(target.dataset.courseSlug);
+}
+
+async function copyCourseLinkBySlug(slug) {
+  const url = getCourseGamePageUrl(slug);
+  try {
+    await navigator.clipboard.writeText(url);
+    showToast("已複製前台連結");
+  } catch (error) {
+    console.warn("Unable to copy course link", error);
+    showToast("前台連結已產生，可從網址列複製");
+  }
+  render();
+}
+
+function requestDeleteSavedCourse(target) {
+  courseDelete.pendingCourseId = target.dataset.courseId || "";
+  showToast("請再按一次確認刪除");
+  render();
+}
+
+function cancelDeleteSavedCourse() {
+  courseDelete.pendingCourseId = "";
+  courseDelete.deletingCourseId = "";
+  render();
+}
+
+async function deleteSavedCourse(target) {
   const courseId = target.dataset.courseId;
+  if (!courseId || courseDelete.deletingCourseId) return;
+
   const courses = loadCourseLibrary();
   const course = courses.find((item) => item.id === courseId);
-  saveCourseLibrary(courses.filter((item) => item.id !== courseId));
-  showToast(course ? `已刪除課程：${course.lesson.name}` : "已刪除課程");
+  if (!course) {
+    courseDelete.pendingCourseId = "";
+    showToast("找不到這份課程");
+    render();
+    return;
+  }
+
+  if (courseDelete.pendingCourseId !== courseId) {
+    requestDeleteSavedCourse(target);
+    return;
+  }
+
+  const cloudCourse = isUuid(course.id);
+  const token = getTeacherWriteToken();
+  if (cloudCourse && !token) {
+    cloudSave.tokenStatus = "empty";
+    cloudSave.tokenMessage = "";
+    showToast("請先輸入並驗證寫入密碼");
+    render();
+    return;
+  }
+
+  courseDelete.deletingCourseId = courseId;
+  showToast(cloudCourse ? "正在刪除雲端課程" : "正在刪除本機課程");
   render();
+
+  try {
+    if (cloudCourse) {
+      if (cloudSave.tokenStatus !== "verified" && !(await verifyTeacherWriteTokenValue(token))) {
+        throw createTeacherTokenError();
+      }
+      await deleteCourseFromCloud(course.id, token);
+    }
+
+    removeCourseFromLocalLibrary(courseId);
+    if (state.courseEditor?.selectedCourseId === courseId) {
+      setActiveLesson(createBlankLesson());
+      state.courseEditor = freshCourseEditorState("new");
+      state.view = "teacher";
+    }
+    showToast(cloudCourse ? `已刪除雲端課程：${course.lesson.name}` : `已刪除本機課程：${course.lesson.name}`);
+  } catch (error) {
+    console.warn("Unable to delete course", error);
+    if (error.status === 401) {
+      clearTeacherWriteToken();
+      cloudSave.tokenStatus = "invalid";
+      cloudSave.tokenMessage = "寫入密碼錯誤，請重新輸入。";
+      showToast("寫入密碼錯誤，未刪除課程");
+    } else {
+      showToast(error.message || "課程刪除失敗");
+    }
+  } finally {
+    courseDelete.pendingCourseId = "";
+    courseDelete.deletingCourseId = "";
+    render();
+  }
+}
+
+async function deleteCourseFromCloud(courseId, token) {
+  const response = await fetchSupabaseRest(`courses?id=eq.${encodeURIComponent(courseId)}&select=id`, token, {
+    method: "DELETE",
+    headers: {
+      "Prefer": "return=representation",
+    },
+  });
+  await parseSupabaseResponse(response);
+}
+
+function removeCourseFromLocalLibrary(courseId) {
+  const courses = loadCourseLibrary();
+  saveCourseLibrary(courses.filter((item) => item.id !== courseId));
 }
 
 function formatSavedAt(timestamp) {
@@ -2857,10 +3287,10 @@ function resetMemoryGame() {
 }
 
 function loadDemo() {
-  state.lesson = structuredClone(defaultLesson);
-  state.game = freshGameState({ wordCount: defaultLesson.words.length });
-  state.memory = freshMemoryState({ teams: state.game.teams });
-  state.activeGame = "hub";
+  const lesson = structuredClone(defaultLesson);
+  lesson.slug = createUniqueCourseSlug(`${lesson.slug}-demo`);
+  setActiveLesson(lesson);
+  state.courseEditor = freshCourseEditorState("new");
   state.chromeCollapsed = false;
   showToast("已載入範例課程");
   render();
@@ -2869,6 +3299,11 @@ function loadDemo() {
 function updateLessonField(target) {
   const field = target.dataset.field;
   if (!field) return;
+  if (field === "slug" && isEditingExistingCourse()) {
+    target.value = state.courseEditor.lockedSlug || state.lesson.slug;
+    showToast("既有課程的網址代碼已鎖定");
+    return;
+  }
   state.lesson[field] = field === "slug" ? createCourseSlug(target.value) : target.value;
   saveState();
 }
@@ -3193,11 +3628,17 @@ document.addEventListener("click", (event) => {
   }
   if (action === "reset-game") resetGame();
   if (action === "load-demo") loadDemo();
+  if (action === "start-new-course") startNewCourse();
+  if (action === "duplicate-course") duplicateCurrentCourse();
+  if (action === "copy-current-course-link") copyCurrentCourseLink();
+  if (action === "copy-course-link") copySavedCourseLink(target);
   if (action === "verify-teacher-token") verifyTeacherWriteToken();
   if (action === "clear-teacher-token") clearTeacherTokenInput();
   if (action === "save-course") saveCurrentCourse();
   if (action === "load-course") loadSavedCourse(target);
-  if (action === "delete-course") deleteSavedCourse(target);
+  if (action === "request-delete-course") requestDeleteSavedCourse(target);
+  if (action === "cancel-delete-course") cancelDeleteSavedCourse();
+  if (action === "confirm-delete-course") deleteSavedCourse(target);
   if (action === "roll") rollDice();
   if (action === "mark-correct") markCorrect();
   if (action === "skip-task") skipTask();
@@ -3231,6 +3672,9 @@ document.addEventListener("change", (event) => {
   const target = event.target;
   if (target.dataset.action === "edit-ask-mode") {
     updateAskMode(target);
+  }
+  if (target.dataset.action === "select-course") {
+    selectCourseFromPicker(target);
   }
   if (target.dataset.action === "toggle-task") {
     toggleTask(target);

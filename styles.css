@@ -1494,6 +1494,11 @@ select:focus {
   font-weight: 900;
 }
 
+input[readonly] {
+  background: rgba(241, 245, 249, 0.92);
+  color: #475569;
+}
+
 .checks {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1533,6 +1538,68 @@ select:focus {
   width: 48px;
   min-height: 42px;
   padding: 3px;
+}
+
+.course-editor-panel {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid rgba(24, 34, 45, 0.1);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.82);
+}
+
+.course-editor-head,
+.course-picker-row,
+.course-editor-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.course-editor-head {
+  justify-content: space-between;
+}
+
+.course-editor-head h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.course-editor-head span:not(.course-mode-pill) {
+  display: block;
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 850;
+}
+
+.course-mode-pill {
+  flex: 0 0 auto;
+  padding: 6px 9px;
+  border-radius: 8px;
+  background: rgba(59, 130, 246, 0.11);
+  color: #1d4ed8;
+  font-size: 0.78rem;
+  font-weight: 950;
+}
+
+.course-mode-pill.is-new {
+  background: rgba(41, 196, 106, 0.13);
+  color: #0d8c4a;
+}
+
+.course-picker-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+}
+
+.course-editor-actions {
+  flex-wrap: wrap;
+}
+
+.course-editor-actions button {
+  min-height: 36px;
 }
 
 .course-library {
@@ -1622,6 +1689,16 @@ select:focus {
   box-shadow: 0 4px 0 rgba(24, 34, 45, 0.04);
 }
 
+.course-item.is-selected {
+  border-color: rgba(19, 139, 132, 0.42);
+  background: rgba(229, 255, 247, 0.86);
+}
+
+.course-item.is-delete-pending {
+  border-color: rgba(232, 86, 72, 0.36);
+  background: rgba(255, 241, 239, 0.9);
+}
+
 .course-info {
   display: grid;
   min-width: 0;
@@ -1639,6 +1716,10 @@ select:focus {
   color: var(--muted);
   font-size: 0.78rem;
   font-weight: 800;
+}
+
+.course-info .course-delete-warning {
+  color: #b42920;
 }
 
 .course-actions {
@@ -1727,6 +1808,11 @@ select:focus {
   padding: 0 10px;
   background: rgba(232, 86, 72, 0.1);
   color: #b42920;
+}
+
+.mini-button.is-danger {
+  background: #b42920;
+  color: white;
 }
 
 .import-box {
@@ -2332,9 +2418,23 @@ select:focus {
   }
 
   .course-library-head,
-  .course-item {
+  .course-item,
+  .course-editor-head {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .course-picker-row {
+    grid-template-columns: 1fr;
+  }
+
+  .course-editor-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .course-editor-actions button {
+    width: 100%;
   }
 
   .course-actions {

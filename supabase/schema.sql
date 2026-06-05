@@ -82,7 +82,7 @@ as $$
       'sha256'
     ),
     'hex'
-  ) = '8372aaf6c6bf0e0e231ecc4e43015f7d57d3fc6eefaf44719527af5dd79bc0cd';
+  ) = 'b7229ba8b70fde3939425c1e6284c37dfb452f55dbb0d51ce9c060fe50aedbc0';
 $$;
 
 grant execute on function public.teacher_write_allowed() to anon, authenticated;
