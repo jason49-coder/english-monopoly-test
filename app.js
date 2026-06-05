@@ -665,7 +665,14 @@ function createCourseSlug(value) {
 function getRouteView() {
   const path = window.location.pathname.toLowerCase();
   const params = new URLSearchParams(window.location.search);
-  if (path.endsWith("/teacher") || path.endsWith("/teacher.html") || params.get("admin") === "1" || params.get("view") === "teacher") {
+  if (
+    path.endsWith("/teacher")
+    || path.endsWith("/teacher/")
+    || path.endsWith("/teacher.html")
+    || path.endsWith("/teacher/index.html")
+    || params.get("admin") === "1"
+    || params.get("view") === "teacher"
+  ) {
     return "teacher";
   }
   return "game";
@@ -679,10 +686,17 @@ function applyRouteView() {
 }
 
 function getGamePageUrl() {
+  if (state.view === "teacher" && window.location.pathname.toLowerCase().includes("/teacher")) {
+    return new URL("../index.html", window.location.href).href;
+  }
   return new URL("index.html", window.location.href).href;
 }
 
 function getTeacherPageUrl() {
+  const path = window.location.pathname.toLowerCase();
+  if (path.endsWith("/teacher") || path.endsWith("/teacher/") || path.endsWith("/teacher/index.html")) {
+    return new URL("./", window.location.href).href;
+  }
   return new URL("teacher.html", window.location.href).href;
 }
 
