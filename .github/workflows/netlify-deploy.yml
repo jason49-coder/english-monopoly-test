@@ -23,4 +23,7 @@ jobs:
         env:
           NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
           NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
-        run: npx --yes netlify-cli@latest deploy --prod --dir . --site "$NETLIFY_SITE_ID"
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+          TEACHER_WRITE_TOKEN: ${{ secrets.TEACHER_WRITE_TOKEN }}
+        run: npx --yes netlify-cli@latest deploy --prod --dir . --site "$NETLIFY_SITE_ID" --skip-functions-cache
