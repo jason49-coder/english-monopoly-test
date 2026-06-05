@@ -100,6 +100,9 @@ let supabaseClient = null;
 let supabaseScriptPromise = null;
 const cloudSave = {
   saving: false,
+  verifying: false,
+  tokenStatus: "empty",
+  tokenMessage: "",
 };
 const animation = {
   rolling: false,
@@ -1353,7 +1356,6 @@ function getAskPreview() {
 
 function renderCourseLibrary() {
   const courses = loadCourseLibrary();
-  const saving = cloudSave.saving;
 
   return `
     <section class="course-library">
@@ -1362,11 +1364,8 @@ function renderCourseLibrary() {
           <div class="section-kicker">課程庫</div>
           <h3>已儲存課程</h3>
         </div>
-        <div class="course-actions">
-          <button class="ghost-button" type="button" data-action="set-teacher-token" ${saving ? "disabled" : ""}>寫入密碼</button>
-          <button class="success-button" type="button" data-action="save-course" ${saving ? "disabled" : ""}>${saving ? "寫入中" : "儲存到 Supabase"}</button>
-        </div>
       </div>
+      ${renderCloudWritePanel()}
       ${courses.length ? `
         <div class="course-list">
           ${courses.map((course) => renderSavedCourse(course)).join("")}
@@ -1374,6 +1373,67 @@ function renderCourseLibrary() {
       ` : `<div class="empty-state course-empty">還沒有儲存課程，先設定單字後按「儲存到 Supabase」。</div>`}
     </section>
   `;
+}
+
+function renderCloudWritePanel() {
+  const token = getTeacherWriteToken();
+  const saving = cloudSave.saving;
+  const verifying = cloudSave.verifying;
+  const disabled = saving || verifying;
+  const status = getTeacherWriteTokenStatus();
+  const placeholder = token ? "本分頁已記住密碼" : "輸入老師寫入密碼";
+
+  return `
+    <div class="cloud-write-panel">
+      <div class="cloud-write-header">
+        <label class="small-label" for="teacherWriteToken">Supabase 寫入</label>
+        <span class="cloud-token-status ${status.className}" role="status" aria-live="polite">${escapeHtml(status.message)}</span>
+      </div>
+      <div class="cloud-token-row">
+        <input id="teacherWriteToken" type="password" data-action="teacher-token-input" placeholder="${escapeAttr(placeholder)}" autocomplete="current-password" ${disabled ? "disabled" : ""} />
+        <button class="ghost-button" type="button" data-action="verify-teacher-token" ${disabled || !token ? "disabled" : ""}>${verifying ? "驗證中" : "驗證"}</button>
+        <button class="plain-button" type="button" data-action="clear-teacher-token" ${disabled || !token ? "disabled" : ""}>清除</button>
+      </div>
+      <button class="success-button cloud-save-button" type="button" data-action="save-course" ${disabled ? "disabled" : ""}>${saving ? "寫入中" : "儲存到 Supabase"}</button>
+    </div>
+  `;
+}
+
+function getTeacherWriteTokenStatus() {
+  if (cloudSave.verifying) {
+    return { className: "is-muted", message: "正在驗證寫入密碼。" };
+  }
+
+  if (cloudSave.saving) {
+    return { className: "is-muted", message: "正在寫入 Supabase。" };
+  }
+
+  const token = getTeacherWriteToken();
+  if (!token) {
+    return { className: "is-muted", message: "尚未輸入寫入密碼；課程會先保存在本機。" };
+  }
+
+  if (cloudSave.tokenStatus === "verified") {
+    return { className: "is-ok", message: cloudSave.tokenMessage || "密碼已驗證，可以寫入 Supabase。" };
+  }
+
+  if (cloudSave.tokenStatus === "saved") {
+    return { className: "is-ok", message: cloudSave.tokenMessage || "已成功寫入 Supabase。" };
+  }
+
+  if (cloudSave.tokenStatus === "invalid") {
+    return { className: "is-error", message: cloudSave.tokenMessage || "寫入密碼錯誤，請重新輸入。" };
+  }
+
+  if (cloudSave.tokenStatus === "error") {
+    return { className: "is-error", message: cloudSave.tokenMessage || "驗證失敗，請稍後再試。" };
+  }
+
+  if (cloudSave.tokenStatus === "pending") {
+    return { className: "is-muted", message: cloudSave.tokenMessage || "尚未驗證；按「驗證」確認密碼。" };
+  }
+
+  return { className: "is-muted", message: "本分頁已有寫入密碼，按「驗證」可確認是否正確。" };
 }
 
 function renderSavedCourse(course) {
@@ -2331,8 +2391,10 @@ async function saveCurrentCourse() {
   if (cloudSave.saving) return;
 
   const lesson = saveCurrentCourseLocally();
-  const token = getTeacherWriteToken() || promptTeacherWriteToken();
+  const token = getTeacherWriteToken();
   if (!token) {
+    cloudSave.tokenStatus = "empty";
+    cloudSave.tokenMessage = "";
     showToast(`已儲存本機：${lesson.name}`);
     render();
     return;
@@ -2343,14 +2405,24 @@ async function saveCurrentCourse() {
   render();
 
   try {
+    if (cloudSave.tokenStatus !== "verified" && !(await verifyTeacherWriteTokenValue(token))) {
+      throw createTeacherTokenError();
+    }
+
     const result = await saveCourseToCloud(lesson, token);
+    cloudSave.tokenStatus = "saved";
+    cloudSave.tokenMessage = `已成功寫入：${result.name || lesson.name}`;
     showToast(`已寫入 Supabase：${result.name || lesson.name}`);
   } catch (error) {
     console.warn("Unable to save course to Supabase", error);
     if (error.status === 401) {
       clearTeacherWriteToken();
+      cloudSave.tokenStatus = "invalid";
+      cloudSave.tokenMessage = "寫入密碼錯誤，請重新輸入。";
       showToast("寫入密碼錯誤，已清除本次密碼");
     } else {
+      cloudSave.tokenStatus = "error";
+      cloudSave.tokenMessage = error.message || "Supabase 寫入失敗，已保留本機課程。";
       showToast(error.message || "Supabase 寫入失敗，已保留本機課程");
     }
   } finally {
@@ -2488,6 +2560,101 @@ async function parseSupabaseResponse(response) {
   return payload;
 }
 
+function updateTeacherTokenInput(target) {
+  const normalized = String(target.value || "").trim();
+  if (normalized) {
+    storeTeacherWriteToken(normalized);
+    cloudSave.tokenStatus = "pending";
+    cloudSave.tokenMessage = "尚未驗證；按「驗證」確認密碼。";
+  } else {
+    clearTeacherWriteToken();
+    cloudSave.tokenStatus = "empty";
+    cloudSave.tokenMessage = "";
+  }
+  updateTeacherTokenFeedback();
+}
+
+function updateTeacherTokenFeedback() {
+  const status = getTeacherWriteTokenStatus();
+  const statusElement = document.querySelector(".cloud-token-status");
+  if (statusElement) {
+    statusElement.className = `cloud-token-status ${status.className}`;
+    statusElement.textContent = status.message;
+  }
+
+  const hasToken = Boolean(getTeacherWriteToken());
+  const disabled = cloudSave.saving || cloudSave.verifying;
+  const verifyButton = document.querySelector('[data-action="verify-teacher-token"]');
+  const clearButton = document.querySelector('[data-action="clear-teacher-token"]');
+  if (verifyButton) verifyButton.disabled = disabled || !hasToken;
+  if (clearButton) clearButton.disabled = disabled || !hasToken;
+}
+
+async function verifyTeacherWriteToken() {
+  if (cloudSave.saving || cloudSave.verifying) return false;
+
+  const token = getTeacherWriteToken();
+  if (!token) {
+    cloudSave.tokenStatus = "empty";
+    cloudSave.tokenMessage = "";
+    showToast("請先輸入寫入密碼");
+    render();
+    return false;
+  }
+
+  cloudSave.verifying = true;
+  cloudSave.tokenStatus = "pending";
+  cloudSave.tokenMessage = "";
+  showToast("正在驗證寫入密碼");
+  render();
+
+  try {
+    const allowed = await verifyTeacherWriteTokenValue(token);
+    if (!allowed) {
+      throw createTeacherTokenError();
+    }
+
+    cloudSave.tokenStatus = "verified";
+    cloudSave.tokenMessage = "密碼正確，可以寫入 Supabase。";
+    showToast("寫入密碼已驗證");
+    return true;
+  } catch (error) {
+    console.warn("Unable to verify teacher write token", error);
+    if (error.status === 401) {
+      clearTeacherWriteToken();
+      cloudSave.tokenStatus = "invalid";
+      cloudSave.tokenMessage = "寫入密碼錯誤，請重新輸入。";
+      showToast("寫入密碼錯誤");
+    } else {
+      cloudSave.tokenStatus = "error";
+      cloudSave.tokenMessage = error.message || "驗證失敗，請稍後再試。";
+      showToast(error.message || "驗證失敗，請稍後再試");
+    }
+    return false;
+  } finally {
+    cloudSave.verifying = false;
+    render();
+  }
+}
+
+async function verifyTeacherWriteTokenValue(token) {
+  const response = await fetchSupabaseRest("rpc/teacher_write_allowed", token, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: "{}",
+  });
+  const payload = await parseSupabaseResponse(response);
+  return payload === true;
+}
+
+function createTeacherTokenError() {
+  const error = new Error("寫入密碼錯誤");
+  error.status = 401;
+  return error;
+}
+
 function getTeacherWriteToken() {
   try {
     return sessionStorage.getItem(TEACHER_WRITE_TOKEN_KEY) || "";
@@ -2512,18 +2679,11 @@ function clearTeacherWriteToken() {
   }
 }
 
-function promptTeacherWriteToken() {
-  const token = window.prompt("老師雲端寫入密碼");
-  const normalized = String(token || "").trim();
-  if (normalized) {
-    storeTeacherWriteToken(normalized);
-  }
-  return normalized;
-}
-
-function setTeacherWriteToken() {
-  const token = promptTeacherWriteToken();
-  showToast(token ? "已設定寫入密碼" : "未設定寫入密碼");
+function clearTeacherTokenInput() {
+  clearTeacherWriteToken();
+  cloudSave.tokenStatus = "empty";
+  cloudSave.tokenMessage = "";
+  showToast("已清除寫入密碼");
   render();
 }
 
@@ -3033,7 +3193,8 @@ document.addEventListener("click", (event) => {
   }
   if (action === "reset-game") resetGame();
   if (action === "load-demo") loadDemo();
-  if (action === "set-teacher-token") setTeacherWriteToken();
+  if (action === "verify-teacher-token") verifyTeacherWriteToken();
+  if (action === "clear-teacher-token") clearTeacherTokenInput();
   if (action === "save-course") saveCurrentCourse();
   if (action === "load-course") loadSavedCourse(target);
   if (action === "delete-course") deleteSavedCourse(target);
@@ -3060,6 +3221,7 @@ document.addEventListener("input", (event) => {
   if (action === "edit-tags") updateTags(target);
   if (action === "edit-patterns") updatePatterns(target);
   if (action === "edit-ask-patterns") updateAskPatterns(target);
+  if (action === "teacher-token-input") updateTeacherTokenInput(target);
   if (action === "edit-memory-pairs") updateMemoryPairCount(target);
   if (action === "edit-word") updateWord(target);
   if (action === "edit-team") updateTeam(target);
@@ -3080,6 +3242,14 @@ document.addEventListener("submit", (event) => {
   if (form.dataset.action === "add-word-form") {
     event.preventDefault();
     addWord(form);
+  }
+});
+
+document.addEventListener("keydown", (event) => {
+  const target = event.target;
+  if (target?.dataset?.action === "teacher-token-input" && event.key === "Enter") {
+    event.preventDefault();
+    verifyTeacherWriteToken();
   }
 });
 

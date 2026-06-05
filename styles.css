@@ -1562,6 +1562,52 @@ select:focus {
   font-size: 1rem;
 }
 
+.cloud-write-panel {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid rgba(19, 139, 132, 0.18);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.cloud-write-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.cloud-token-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.cloud-token-row button {
+  min-height: 42px;
+}
+
+.cloud-token-status {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 900;
+  text-align: right;
+}
+
+.cloud-token-status.is-ok {
+  color: #0d8c4a;
+}
+
+.cloud-token-status.is-error {
+  color: #b42920;
+}
+
+.cloud-save-button {
+  width: 100%;
+}
+
 .course-list {
   display: grid;
   gap: 8px;
@@ -2297,6 +2343,19 @@ select:focus {
 
   .course-actions button {
     flex: 1 1 0;
+  }
+
+  .cloud-write-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .cloud-token-row {
+    grid-template-columns: 1fr;
+  }
+
+  .cloud-token-status {
+    text-align: left;
   }
 
   .action-pad,
