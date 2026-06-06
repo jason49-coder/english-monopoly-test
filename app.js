@@ -35,11 +35,12 @@ const defaultLesson = {
 };
 
 const teamColors = ["#e85648", "#138b84", "#3b82f6", "#7c3aed"];
+const TEAM_AVATARS = ["🐰", "🐻", "🦁", "🐯", "🐸", "🐼", "🦊", "🐨"];
 
 const defaultTeams = [
-  { id: "red", name: "Red Team", color: teamColors[0], position: 0, coins: 300 },
-  { id: "green", name: "Green Team", color: teamColors[1], position: 0, coins: 300 },
-  { id: "blue", name: "Blue Team", color: teamColors[2], position: 0, coins: 300 },
+  { id: "red", name: "Red Team", color: teamColors[0], position: 0, score: 0, avatar: "🐰" },
+  { id: "green", name: "Green Team", color: teamColors[1], position: 0, score: 0, avatar: "🐻" },
+  { id: "blue", name: "Blue Team", color: teamColors[2], position: 0, score: 0, avatar: "🦁" },
 ];
 
 const legacyTeamNames = {
@@ -84,6 +85,7 @@ const boardTileText = {
   chance: { label: "機會卡", title: "幸運卡", short: "?", meta: "驚喜任務", tooltip: "抽一張驚喜任務卡" },
 };
 
+
 let state = loadState();
 let toastTimer = null;
 let celebrationTimer = null;
@@ -121,12 +123,14 @@ const gameCatalog = {
   monopoly: {
     title: "美語大富翁",
     badge: "多人輪流",
+    icon: "🎲",
     summary: "擲骰前進，走到格子後完成 Read the word、Make a sentence、Spell the word 或機會卡任務。",
     action: "玩大富翁",
   },
   memory: {
     title: "記憶翻牌",
     badge: "英文配中文",
+    icon: "🃏",
     summary: "輪流翻兩張牌，把英文單字和中文意思配成一組。",
     action: "玩翻牌",
   },
@@ -183,18 +187,20 @@ function freshMemoryState(options = {}) {
   const teams = options.teams || defaultTeams;
   const maxPairs = Math.min(12, getLessonWords().length);
   const pairCount = maxPairs ? clamp(Number(options.pairCount) || 6, 1, maxPairs) : 0;
+  const imageMode = Boolean(options.imageMode);
 
   return {
     started: Boolean(options.started),
     pairCount,
-    cards: buildMemoryCards(pairCount),
+    imageMode,
+    cards: buildMemoryCards(pairCount, imageMode),
     flippedIds: [],
     matchedIds: [],
     scores: Object.fromEntries(teams.map((team) => [team.id, 0])),
     currentTeamIndex: 0,
     locked: false,
     moves: 0,
-    log: ["選兩張牌，把英文和中文配成一組。"],
+    log: [imageMode ? "翻兩張牌，把圖片和英文配成一組！" : "選兩張牌，把英文和中文配成一組。"],
   };
 }
 
@@ -203,8 +209,9 @@ function resetTeams(teams) {
     id: team.id || `team-${index + 1}`,
     name: normalizeTeamName(team.name, index),
     color: team.color || teamColors[index % teamColors.length],
+    avatar: team.avatar || TEAM_AVATARS[index % TEAM_AVATARS.length],
     position: 0,
-    coins: 300,
+    score: 0,
   }));
 }
 
@@ -228,10 +235,29 @@ function buildWordDrawPile(wordCount) {
   return shuffle(Array.from({ length: safeWordCount }, (_, wordIndex) => wordIndex));
 }
 
-function buildMemoryCards(pairCount) {
+function buildMemoryCards(pairCount, imageMode = false) {
   const words = shuffle(getLessonWords()).slice(0, pairCount);
   const cards = words.flatMap((item, index) => {
     const pairId = `pair-${index}`;
+    if (imageMode && item.image) {
+      return [
+        {
+          id: `${pairId}-img`,
+          pairId,
+          kind: "圖片",
+          text: item.en,
+          image: item.image,
+          answer: item.en,
+        },
+        {
+          id: `${pairId}-word`,
+          pairId,
+          kind: "英文",
+          text: item.en,
+          answer: item.en,
+        },
+      ];
+    }
     return [
       {
         id: `${pairId}-word`,
@@ -803,6 +829,7 @@ function getTeacherPageUrl() {
 function render() {
   ensureGameShape();
   saveState();
+  const teamListScroll = document.querySelector(".team-list")?.scrollTop ?? 0;
   const app = document.querySelector("#app");
   app.innerHTML = `
     ${renderTopbar()}
@@ -813,7 +840,11 @@ function render() {
     ${state.toast ? `<div class="toast">${escapeHtml(state.toast)}</div>` : ""}
   `;
   syncGameViewport();
-  requestAnimationFrame(syncGameViewport);
+  requestAnimationFrame(() => {
+    syncGameViewport();
+    const tl = document.querySelector(".team-list");
+    if (tl) tl.scrollTop = teamListScroll;
+  });
 }
 
 function syncGameViewport() {
@@ -901,14 +932,18 @@ function renderGameHub() {
           <p>${words.length} 個單字 · ${tags.length ? tags.map((tag) => `#${escapeHtml(tag)}`).join(" ") : "尚未設定標籤"}</p>
           <p class="course-link-preview">課程網址代碼：${escapeHtml(state.lesson.slug || "my-course")}</p>
         </div>
+        <div class="hub-hero-deco" aria-hidden="true">🌟</div>
       </div>
       <div class="game-choice-grid">
-        ${Object.entries(gameCatalog).map(([key, game]) => `
-          <article class="game-choice-card">
-            <div class="game-choice-badge">${escapeHtml(game.badge)}</div>
+        ${Object.entries(gameCatalog).map(([key, game], i) => `
+          <article class="game-choice-card animate__animated animate__fadeInUp" data-game="${key}" style="--animate-delay:${i * 0.12}s">
+            <div class="game-choice-top">
+              <span class="game-choice-icon">${game.icon || ""}</span>
+              <div class="game-choice-badge">${escapeHtml(game.badge)}</div>
+            </div>
             <h3>${escapeHtml(game.title)}</h3>
             <p>${escapeHtml(game.summary)}</p>
-            <button class="primary-button" data-action="select-game" data-game="${key}" ${hasWords ? "" : "disabled"}>${hasWords ? escapeHtml(game.action) : "請先新增單字"}</button>
+            <button class="game-choice-btn" data-action="select-game" data-game="${key}" ${hasWords ? "" : "disabled"}>${hasWords ? escapeHtml(game.action) : "請先新增單字"}</button>
           </article>
         `).join("")}
       </div>
@@ -924,6 +959,7 @@ function renderMonopolyGame() {
   return `
     <section class="game-layout ${started ? "is-started" : "is-setup"}">
       ${started ? "" : renderGameSetupPanel(busy)}
+      ${started && state.game.phase === "task" ? renderTaskOverlay(currentTeam, busy) : ""}
       <div class="board-wrap">
         <div class="board-grid">
           ${renderTiles()}
@@ -937,41 +973,38 @@ function renderMonopolyGame() {
           <div class="panel-title">
             <h2>Current Team</h2>
             <span class="turn-badge">
-              <span class="team-dot" style="--team-color:${currentTeam.color}"></span>
+              <span class="team-dot" style="--team-color:${currentTeam.color}">${currentTeam.avatar || ""}</span>
               ${escapeHtml(currentTeam.name)}
             </span>
           </div>
         </section>
         ${started ? `
         <section class="action-pad desktop-action-panel">
-          <button class="primary-button wide roll-button" data-action="roll" ${busy || state.game.phase === "task" ? "disabled" : ""}>${rollLabel}</button>
-          <button class="success-button" data-action="mark-correct" ${busy || state.game.phase !== "task" ? "disabled" : ""}>答對</button>
-          <button class="danger-button" data-action="skip-task" ${busy || state.game.phase !== "task" ? "disabled" : ""}>跳過</button>
+          <button class="primary-button roll-button" data-action="roll" ${busy || state.game.phase === "task" ? "disabled" : ""}>${rollLabel}</button>
+          <button class="ghost-button" data-action="toggle-log">課堂紀錄</button>
         </section>` : ""}
-        <section class="compact-grid metrics-panel">
-          <div class="metric">
-            <strong>${state.game.dice}</strong>
-            <span>骰子</span>
-          </div>
-        </section>
         <section class="team-status-panel">
           <div class="panel-title">
-            <h2>Team Status</h2>
+            <h2>隊伍分數</h2>
           </div>
           <div class="team-list">
             ${state.game.teams.map((team, index) => renderTeamRow(team, index)).join("")}
           </div>
         </section>
-        <section class="log-panel">
-          <div class="panel-title">
-            <h2>課堂紀錄</h2>
-          </div>
-          <div class="log-list">
-            ${state.game.log.slice(-7).reverse().map((item) => `<div class="log-item">${escapeHtml(item)}</div>`).join("")}
-          </div>
-        </section>
       </aside>
       ${started ? renderMobileDock(currentTeam, busy, rollLabel) : ""}
+      ${state.game.logOpen ? `
+      <div class="log-modal" data-action="close-log">
+        <div class="log-modal-card">
+          <div class="log-modal-header">
+            <h2>課堂紀錄</h2>
+            <button class="ghost-button" data-action="toggle-log">✕ 關閉</button>
+          </div>
+          <div class="log-modal-list">
+            ${state.game.log.slice().reverse().map((item) => `<div class="log-item">${escapeHtml(item)}</div>`).join("") || '<div class="log-item">尚無紀錄</div>'}
+          </div>
+        </div>
+      </div>` : ""}
     </section>
   `;
 }
@@ -1007,9 +1040,14 @@ function renderGameSetupPanel(busy) {
           <div class="team-edit-list">
             ${state.game.teams.map((team, index) => `
               <div class="team-edit-row">
-                <input type="color" value="${escapeAttr(team.color)}" data-action="edit-team" data-index="${index}" data-field="color" aria-label="${escapeAttr(team.name)} color" ${busy ? "disabled" : ""} />
-                <input value="${escapeAttr(team.name)}" data-action="edit-team" data-index="${index}" data-field="name" aria-label="Team name ${index + 1}" ${busy ? "disabled" : ""} />
-                <button class="mini-button" type="button" data-action="delete-team" data-index="${index}" ${state.game.teams.length <= 1 || busy ? "disabled" : ""}>Delete</button>
+                <div class="avatar-picker">
+                  ${TEAM_AVATARS.map((emoji) => `<button class="avatar-option ${team.avatar === emoji ? "is-selected" : ""}" type="button" data-action="select-team-avatar" data-index="${index}" data-avatar="${emoji}" ${busy ? "disabled" : ""}>${emoji}</button>`).join("")}
+                </div>
+                <div class="team-edit-controls">
+                  <input type="color" value="${escapeAttr(team.color)}" data-action="edit-team" data-index="${index}" data-field="color" aria-label="${escapeAttr(team.name)} color" ${busy ? "disabled" : ""} />
+                  <input value="${escapeAttr(team.name)}" data-action="edit-team" data-index="${index}" data-field="name" aria-label="Team name ${index + 1}" ${busy ? "disabled" : ""} />
+                  <button class="mini-button" type="button" data-action="delete-team" data-index="${index}" ${state.game.teams.length <= 1 || busy ? "disabled" : ""}>刪除</button>
+                </div>
               </div>
             `).join("")}
           </div>
@@ -1038,7 +1076,7 @@ function renderMemoryGame() {
               <h2>英文配中文</h2>
             </div>
             <span class="turn-badge">
-              <span class="team-dot" style="--team-color:${currentTeam.color}"></span>
+              <span class="team-dot" style="--team-color:${currentTeam.color}">${currentTeam.avatar || ""}</span>
               ${escapeHtml(currentTeam.name)}
             </span>
           </div>
@@ -1071,9 +1109,11 @@ function renderMemoryGame() {
 }
 
 function renderMemorySetupPanel(busy) {
-  const wordCount = getLessonWords().length;
+  const words = getLessonWords();
+  const wordCount = words.length;
   const maxPairs = Math.min(12, wordCount);
   const setupDisabled = busy || !wordCount;
+  const hasImages = words.some((w) => w.image);
 
   return `
     <section class="game-setup-panel memory-setup-panel">
@@ -1088,7 +1128,12 @@ function renderMemorySetupPanel(busy) {
         <div class="setup-block">
           <label class="check-label" for="memoryPairCount">卡片組數</label>
           <input id="memoryPairCount" type="number" min="${maxPairs ? 1 : 0}" max="${maxPairs}" value="${state.memory.pairCount}" data-action="edit-memory-pairs" ${setupDisabled ? "disabled" : ""} />
-          <p class="setup-note">${wordCount ? "每組會自動產生 1 張英文牌和 1 張中文牌。" : "請先到老師後台新增單字。"}</p>
+          ${hasImages ? `
+          <label class="check-label image-mode-label">
+            <input type="checkbox" data-action="toggle-image-mode" ${state.memory.imageMode ? "checked" : ""} ${busy ? "disabled" : ""} />
+            🖼️ 圖片配英文模式（需要單字有圖片）
+          </label>` : ""}
+          <p class="setup-note">${wordCount ? (state.memory.imageMode ? "翻開圖片牌找到對應的英文牌！" : "每組會自動產生 1 張英文牌和 1 張中文牌。") : "請先到老師後台新增單字。"}</p>
         </div>
         <div class="setup-block">
           <div class="setup-block-head">
@@ -1098,9 +1143,14 @@ function renderMemorySetupPanel(busy) {
           <div class="team-edit-list">
             ${state.game.teams.map((team, index) => `
               <div class="team-edit-row">
-                <input type="color" value="${escapeAttr(team.color)}" data-action="edit-team" data-index="${index}" data-field="color" aria-label="${escapeAttr(team.name)} color" ${busy ? "disabled" : ""} />
-                <input value="${escapeAttr(team.name)}" data-action="edit-team" data-index="${index}" data-field="name" aria-label="Team name ${index + 1}" ${busy ? "disabled" : ""} />
-                <button class="mini-button" type="button" data-action="delete-team" data-index="${index}" ${state.game.teams.length <= 1 || busy ? "disabled" : ""}>Delete</button>
+                <div class="avatar-picker">
+                  ${TEAM_AVATARS.map((emoji) => `<button class="avatar-option ${team.avatar === emoji ? "is-selected" : ""}" type="button" data-action="select-team-avatar" data-index="${index}" data-avatar="${emoji}" ${busy ? "disabled" : ""}>${emoji}</button>`).join("")}
+                </div>
+                <div class="team-edit-controls">
+                  <input type="color" value="${escapeAttr(team.color)}" data-action="edit-team" data-index="${index}" data-field="color" aria-label="${escapeAttr(team.name)} color" ${busy ? "disabled" : ""} />
+                  <input value="${escapeAttr(team.name)}" data-action="edit-team" data-index="${index}" data-field="name" aria-label="Team name ${index + 1}" ${busy ? "disabled" : ""} />
+                  <button class="mini-button" type="button" data-action="delete-team" data-index="${index}" ${state.game.teams.length <= 1 || busy ? "disabled" : ""}>刪除</button>
+                </div>
               </div>
             `).join("")}
           </div>
@@ -1115,10 +1165,12 @@ function renderMemorySetupPanel(busy) {
 
 function renderMemoryCard(card) {
   const visible = state.memory.flippedIds.includes(card.id) || state.memory.matchedIds.includes(card.id);
+  const matched = state.memory.matchedIds.includes(card.id);
   const classes = [
     "memory-card",
     visible ? "is-visible" : "",
-    state.memory.matchedIds.includes(card.id) ? "is-matched" : "",
+    matched ? "is-matched" : "",
+    matched ? "animate__animated animate__tada" : "",
   ].filter(Boolean).join(" ");
 
   return `
@@ -1126,7 +1178,10 @@ function renderMemoryCard(card) {
       <span class="memory-card-back">?</span>
       <span class="memory-card-face">
         <small>${escapeHtml(card.kind)}</small>
-        <strong>${escapeHtml(card.text)}</strong>
+        ${card.image
+          ? `<img class="memory-card-image" src="${escapeAttr(card.image)}" alt="${escapeAttr(card.text)}" />`
+          : `<strong>${escapeHtml(card.text)}</strong>`
+        }
       </span>
     </button>
   `;
@@ -1143,12 +1198,12 @@ function renderMemoryTeamRow(team, index) {
 
   return `
     <div class="${classes}" style="--team-color:${team.color}">
-      <div class="team-avatar">${escapeHtml(team.name.charAt(0))}</div>
+      <div class="team-avatar">${team.avatar || escapeHtml(team.name.charAt(0))}</div>
       <div>
         <div class="team-name">${escapeHtml(team.name)}</div>
-        <div class="team-stats">Matches ${state.memory.scores[team.id] || 0}</div>
+        <div class="team-stats">配對 ${state.memory.scores[team.id] || 0} 組</div>
       </div>
-      <div class="score-pill">${state.memory.scores[team.id] || 0}</div>
+      <div class="score-pill">⭐ ${state.memory.scores[team.id] || 0}</div>
     </div>
   `;
 }
@@ -1186,8 +1241,7 @@ function renderMobileDock(currentTeam, busy, rollLabel) {
       </div>
       <div class="mobile-action-grid">
         <button class="primary-button roll-button" data-action="roll" ${busy || state.game.phase === "task" ? "disabled" : ""}>${rollLabel}</button>
-        <button class="success-button" data-action="mark-correct" ${busy || state.game.phase !== "task" ? "disabled" : ""}>答對</button>
-        <button class="danger-button" data-action="skip-task" ${busy || state.game.phase !== "task" ? "disabled" : ""}>跳過</button>
+        <button class="ghost-button" data-action="toggle-log">課堂紀錄</button>
       </div>
     </section>
   `;
@@ -1242,7 +1296,7 @@ function renderTileShortWord(tile) {
 function renderPawnsForTile(tileIndex) {
   return state.game.teams
     .filter((team) => team.position === tileIndex)
-    .map((team) => `<span class="pawn ${animation.movingTeamId === team.id ? "is-moving" : ""}" title="${escapeAttr(team.name)}" style="--team-color:${team.color}">${team.name.charAt(0)}</span>`)
+    .map((team) => `<span class="pawn ${animation.movingTeamId === team.id ? "is-moving" : ""}" title="${escapeAttr(team.name)}" style="--team-color:${team.color}">${team.avatar || team.name.charAt(0)}</span>`)
     .join("");
 }
 
@@ -1259,13 +1313,37 @@ function renderMissionCard() {
   }
 
   return `
-    <section class="mission-card has-task">
+    <section class="mission-card has-task animate__animated animate__bounceIn">
       <div class="mission-kicker">${escapeHtml(task.kicker)}</div>
       <h2 class="mission-title">${escapeHtml(task.title)}</h2>
       <p class="mission-prompt">${escapeHtml(task.prompt)}</p>
       <p class="mission-support">${escapeHtml(task.support)}</p>
       ${renderDiceFace()}
     </section>
+  `;
+}
+
+function renderTaskOverlay(currentTeam, busy) {
+  const task = state.game.currentTask;
+  if (!task) return "";
+
+  return `
+    <div class="task-overlay animate__animated animate__fadeIn">
+      <div class="task-overlay-card animate__animated animate__zoomIn">
+        <div class="task-overlay-team" style="--team-color:${currentTeam.color}">
+          <span class="task-overlay-avatar">${currentTeam.avatar || currentTeam.name.charAt(0)}</span>
+          <span>${escapeHtml(currentTeam.name)} 的回合</span>
+        </div>
+        <div class="task-overlay-kicker">${escapeHtml(task.kicker)}</div>
+        <h2 class="task-overlay-title">${escapeHtml(task.title)}</h2>
+        <p class="task-overlay-prompt">${escapeHtml(task.prompt)}</p>
+        <p class="task-overlay-support">${escapeHtml(task.support)}</p>
+        <div class="task-overlay-actions">
+          <button class="success-button" data-action="mark-correct" ${busy ? "disabled" : ""}>✓ 答對！</button>
+          <button class="danger-button" data-action="skip-task" ${busy ? "disabled" : ""}>✗ 答錯</button>
+        </div>
+      </div>
+    </div>
   `;
 }
 
@@ -1327,7 +1405,7 @@ function renderCelebration() {
   return `
     <div class="celebration" aria-live="polite">
       <div class="celebration-burst">${pieces}</div>
-      <div class="celebration-card">
+      <div class="celebration-card animate__animated animate__jackInTheBox">
         <span class="celebration-mark">A+</span>
         <strong>${escapeHtml(animation.celebrationMessage || "答對了！")}</strong>
       </div>
@@ -1337,13 +1415,10 @@ function renderCelebration() {
 
 function renderTeamRow(team, index) {
   return `
-    <div class="team-row ${index === state.game.currentTeamIndex ? "is-active" : ""}" style="--team-color:${team.color}">
-      <div class="team-avatar">${escapeHtml(team.name.charAt(0))}</div>
-      <div>
-        <div class="team-name">${escapeHtml(team.name)}</div>
-        <div class="team-stats">Position ${team.position}</div>
-      </div>
-      <div class="score-pill">$${team.coins}</div>
+    <div class="team-row ${index === state.game.currentTeamIndex ? "is-active" : ""}" style="--team-color:${team.color}" data-team-id="${team.id}">
+      <div class="team-avatar">${team.avatar || escapeHtml(team.name.charAt(0))}</div>
+      <div class="team-name">${escapeHtml(team.name)}</div>
+      <div class="score-pill">⭐ ${team.score} 分</div>
     </div>
   `;
 }
@@ -1725,6 +1800,7 @@ async function rollDice() {
   state.game.started = true;
   state.chromeCollapsed = true;
   const team = getCurrentTeam();
+  state.game.preRollPosition = team.position;
   const dice = Math.floor(Math.random() * 6) + 1;
 
   state.game.currentTask = null;
@@ -1740,7 +1816,8 @@ async function rollDice() {
 
   animation.movingTeamId = team.id;
   updateMovementChrome(true);
-  let passedStart = false;
+  let passedStart = !!(state.game.landedOnStart?.[team.id]);
+  if (state.game.landedOnStart) delete state.game.landedOnStart[team.id];
 
   for (let step = 0; step < dice; step += 1) {
     const previousStep = team.position;
@@ -1759,18 +1836,15 @@ async function rollDice() {
   updateMovementChrome(false);
   const nextPosition = team.position;
 
-  if (passedStart) {
-    team.coins += 100;
-    addLog(`${team.name} passed START and earned $100.`);
-  }
+  state.game.passedStart = passedStart;
 
   if (nextPosition === 0) {
-    team.coins += 100;
-    addLog(`${team.name} landed on START and earned $100.`);
+    if (!state.game.landedOnStart) state.game.landedOnStart = {};
+    state.game.landedOnStart[team.id] = true;
     advanceTeam();
     state.game.currentTask = null;
     state.game.phase = "ready";
-    showToast("起點獎勵");
+    showToast("踩到起點，換下一隊。");
     render();
     return;
   }
@@ -2010,11 +2084,27 @@ async function flipMemoryCard(target) {
       addMemoryLog("全部配對完成！");
       triggerCelebration("完成配對！");
       showToast("全部配對完成");
+      render();
+      requestAnimationFrame(() => {
+        if (window.party) {
+          party.confetti(document.body, {
+            count: party.variation.range(80, 120),
+            spread: party.variation.range(50, 80),
+            size: party.variation.range(0.8, 1.4),
+          });
+        }
+      });
     } else {
       advanceMemoryTeam();
+      render();
+      requestAnimationFrame(() => {
+        if (window.party) {
+          const board = document.querySelector(".memory-board");
+          if (board) party.sparkles(board, { count: party.variation.range(12, 22) });
+        }
+      });
     }
 
-    render();
     return;
   }
 
@@ -2034,27 +2124,75 @@ function markCorrect() {
   if (state.game.phase !== "task" || isBusy()) return;
   const team = getCurrentTeam();
   const task = state.game.currentTask;
-  const reward = 60 + (task.bonus || 0);
+  const reward = 10 + (task.bonus || 0);
+  const startBonus = state.game.passedStart ? 20 : 0;
+  const delta = reward + startBonus;
+  const teamId = team.id;
 
-  team.coins += reward;
-  addLog(`${team.name} answered correctly and earned $${reward}.`);
+  team.score += delta;
+  const logParts = [`答對了，加 ${reward} 分`];
+  if (startBonus) logParts.push(`經過起點加 ${startBonus} 分`);
+  addLog(`${team.name} ${logParts.join("、")}。`);
 
   triggerCelebration("答對了！");
   completeTurn("Correct. Points added.");
+  showScoreFloat(teamId, delta);
+
+  requestAnimationFrame(() => {
+    if (window.party) {
+      const btn = document.querySelector('[data-action="mark-correct"]') || document.querySelector(".celebration-card");
+      const source = btn || document.body;
+      party.confetti(source, {
+        count: party.variation.range(40, 60),
+        spread: party.variation.range(35, 55),
+        size: party.variation.range(0.7, 1.2),
+      });
+    }
+  });
 }
 
 function skipTask() {
   if (state.game.phase !== "task" || isBusy()) return;
-  addLog(`${getCurrentTeam().name} skipped the task.`);
-  completeTurn("Skipped. Next team.");
+  const team = getCurrentTeam();
+  const teamId = team.id;
+  team.score -= 5;
+  const returnPos = state.game.preRollPosition ?? team.position;
+  team.position = returnPos;
+  addLog(`${team.name} 答錯，扣 5 分，退回格子 ${returnPos}。`);
+  completeTurn("答錯！扣 5 分，退回原位。");
+  showScoreFloat(teamId, -5);
 }
 
 function completeTurn(message) {
   state.game.phase = "ready";
   state.game.currentTask = null;
+  state.game.passedStart = false;
   advanceTeam();
   showToast(message);
   render();
+  requestAnimationFrame(() => {
+    const activeRow = document.querySelector(".team-row.is-active");
+    const teamList = document.querySelector(".team-list");
+    if (activeRow && teamList) {
+      const rowTop = activeRow.offsetTop - teamList.offsetTop;
+      const rowBottom = rowTop + activeRow.offsetHeight;
+      if (rowBottom > teamList.scrollTop + teamList.clientHeight || rowTop < teamList.scrollTop) {
+        teamList.scrollTo({ top: rowTop, behavior: "smooth" });
+      }
+    }
+  });
+}
+
+function showScoreFloat(teamId, delta) {
+  requestAnimationFrame(() => {
+    const row = document.querySelector(`[data-team-id="${teamId}"]`);
+    if (!row) return;
+    const el = document.createElement("div");
+    el.className = `score-float ${delta >= 0 ? "score-float-pos" : "score-float-neg"}`;
+    el.textContent = delta >= 0 ? `+${delta}` : `${delta}`;
+    row.appendChild(el);
+    el.addEventListener("animationend", () => el.remove());
+  });
 }
 
 function advanceTeam() {
@@ -3228,16 +3366,18 @@ function updateTeam(target) {
 }
 
 function addTeam() {
-  const index = state.game.teams.length;
-  const color = teamColors[index % teamColors.length];
-  state.game.teams.push({
-    id: `team-${Date.now()}`,
-    name: getDefaultTeamName(index),
-    color,
-    position: 0,
-    coins: 300,
-  });
-  showToast("Team added");
+  const usedColors = new Set(state.game.teams.map(t => t.color));
+  const usedAvatars = new Set(state.game.teams.map(t => t.avatar));
+  const usedNames = new Set(state.game.teams.map(t => t.name));
+
+  const color = teamColors.find(c => !usedColors.has(c)) ?? teamColors[state.game.teams.length % teamColors.length];
+  const avatar = TEAM_AVATARS.find(a => !usedAvatars.has(a)) ?? TEAM_AVATARS[state.game.teams.length % TEAM_AVATARS.length];
+
+  let name, i = 0;
+  do { name = getDefaultTeamName(i++); } while (usedNames.has(name) && i < 100);
+
+  state.game.teams.push({ id: `team-${Date.now()}`, name, color, avatar, position: 0, score: 0 });
+  showToast("已新增隊伍");
   render();
 }
 
@@ -3471,10 +3611,22 @@ document.addEventListener("click", (event) => {
   if (action === "cancel-delete-course") cancelDeleteSavedCourse();
   if (action === "confirm-delete-course") deleteSavedCourse(target);
   if (action === "roll") rollDice();
+  if (action === "toggle-log") { state.game.logOpen = !state.game.logOpen; render(); }
+  if (action === "close-log" && event.target.classList.contains("log-modal")) { state.game.logOpen = false; render(); }
   if (action === "mark-correct") markCorrect();
   if (action === "skip-task") skipTask();
+
   if (action === "flip-memory-card") flipMemoryCard(target);
   if (action === "add-team") addTeam();
+  if (action === "select-team-avatar") {
+    const index = Number(target.dataset.index);
+    const avatar = target.dataset.avatar;
+    if (state.game.teams[index] && avatar) {
+      state.game.teams[index].avatar = avatar;
+      saveState();
+      render();
+    }
+  }
   if (action === "toggle-word-extra") toggleWordExtra(target);
   if (action === "delete-team") deleteTeam(target);
   if (action === "delete-word") deleteWord(target);
@@ -3499,6 +3651,11 @@ document.addEventListener("change", (event) => {
   if (target.dataset.action === "toggle-task") {
     toggleTask(target);
   }
+  if (target.dataset.action === "toggle-image-mode") {
+    state.memory.imageMode = target.checked;
+    saveState();
+    render();
+  }
 });
 
 document.addEventListener("submit", (event) => {
@@ -3516,6 +3673,7 @@ document.addEventListener("keydown", (event) => {
     verifyTeacherWriteToken();
   }
 });
+
 
 window.addEventListener("resize", () => {
   requestAnimationFrame(syncGameViewport);
