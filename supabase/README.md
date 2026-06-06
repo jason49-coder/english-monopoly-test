@@ -2,8 +2,8 @@
 
 This project stores shared course data in two public-schema tables:
 
-- `courses`: lesson metadata, sentence patterns, task settings, and publish state.
-- `words`: vocabulary rows that belong to a course.
+- `courses`: lesson metadata, tags, optional question banks, task settings, and publish state.
+- `words`: vocabulary rows with `en`, `zh`, optional `phonetic`, optional `image`, and a legacy `sentence` column kept for compatibility.
 
 ## Create the database tables
 
@@ -12,7 +12,7 @@ This project stores shared course data in two public-schema tables:
 3. Paste and run `supabase/schema.sql`.
 4. Confirm that `courses` and `words` exist in Table Editor.
 
-The schema enables Row Level Security. Public browser clients can read only published courses and their words. Browser write access is intentionally not enabled yet.
+The schema enables Row Level Security. Public browser clients can read only published courses and their words. Teacher writes require the shared teacher password through the `x-teacher-token` request header.
 
 ## Environment values
 
@@ -27,7 +27,7 @@ TEACHER_WRITE_TOKEN=
 ```
 
 Use the Project URL and anon/publishable key from Supabase project settings. Do not put a service role key in browser code.
-`TEACHER_WRITE_TOKEN` is the shared teacher password used by the Netlify Function before it writes course data.
+`TEACHER_WRITE_TOKEN` is the shared teacher password checked by database RLS before browser writes update course data.
 
 ## Seed the first course
 
@@ -35,5 +35,6 @@ Run `supabase/seed.sql` after `supabase/schema.sql` to create the starter course
 
 - `Unit 1 Animals and Food`
 - 8 vocabulary words
+- 2 optional open question prompts
 
 The seed is safe to rerun. It upserts the course by slug and refreshes that course's word list.

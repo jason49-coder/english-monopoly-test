@@ -5,37 +5,35 @@ create table if not exists public.courses (
   slug text not null,
   name text not null,
   tags text[] not null default '{}',
-  patterns text[] not null default array['I see a ___ .'],
-  ask_patterns text[] not null default array['Do you like ___?', 'Can you see ___?'],
-  ask_mode text not null default 'auto',
   enabled_tasks text[] not null default array['say', 'sentence', 'spell', 'ask', 'act', 'choose'],
   is_published boolean not null default true,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   constraint courses_slug_key unique (slug),
   constraint courses_name_not_blank check (length(btrim(name)) > 0),
-  constraint courses_slug_not_blank check (length(btrim(slug)) > 0),
-  constraint courses_ask_mode_check check (ask_mode in ('auto', 'template', 'student'))
+  constraint courses_slug_not_blank check (length(btrim(slug)) > 0)
 );
 
 create table if not exists public.words (
   id uuid primary key default gen_random_uuid(),
   course_id uuid not null references public.courses(id) on delete cascade,
   position integer not null default 0,
-  word text not null,
-  meaning text not null default '',
-  category text not null default '',
+  en text not null,
+  zh text not null,
   sentence text not null default '',
+  phonetic text not null default '',
+  image text not null default '',
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
-  constraint words_word_not_blank check (length(btrim(word)) > 0),
+  constraint words_en_not_blank check (length(btrim(en)) > 0),
+  constraint words_zh_not_blank check (length(btrim(zh)) > 0),
   constraint words_position_nonnegative check (position >= 0)
 );
 
 create index if not exists courses_slug_idx on public.courses (slug);
 create index if not exists courses_updated_at_idx on public.courses (updated_at desc);
 create index if not exists words_course_position_idx on public.words (course_id, position, created_at);
-create index if not exists words_course_word_idx on public.words (course_id, word);
+create index if not exists words_course_en_idx on public.words (course_id, en);
 
 create or replace function public.set_updated_at()
 returns trigger

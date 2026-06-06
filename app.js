@@ -6,54 +6,46 @@ const SUPABASE_PUBLIC_CONFIG = {
   anonKey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InliYnR0dXptd2Z4d2lnbGxmeGRhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA1ODgwMzQsImV4cCI6MjA5NjE2NDAzNH0.WtcBOa22ZecFStci2uo7hG1bk0mU6YEbiqAsMtzOyiA",
 };
 const SUPABASE_SCRIPT_SRC = "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2";
+const COURSE_AUTOSAVE_DELAY = 3200;
 
 const taskLabels = {
-  say: "唸單字",
-  sentence: "造句",
-  spell: "拼字",
-  ask: "問答",
-  act: "動作表演",
-  choose: "選意思",
-};
-
-const askModeLabels = {
-  auto: "自動依例句",
-  template: "固定課程句型",
-  student: "學生造問句",
+  say: "Read the word",
+  sentence: "Make a sentence",
+  spell: "Spell the word",
+  ask: "Answer a question",
+  act: "Performance",
+  choose: "Choose the Answer",
 };
 
 const defaultLesson = {
   name: "Unit 1 Animals and Food",
   slug: "unit-1-animals-food",
   tags: ["animals", "food"],
-  patterns: ["I see a ___ .", "I like ___ .", "This is a ___ ."],
-  askMode: "auto",
-  askPatterns: ["Do you like ___?", "Can you see ___?"],
   enabledTasks: ["say", "sentence", "spell", "ask", "act", "choose"],
   words: [
-    { word: "cat", meaning: "貓", category: "animals", sentence: "This is a cat." },
-    { word: "dog", meaning: "狗", category: "animals", sentence: "I see a dog." },
-    { word: "rabbit", meaning: "兔子", category: "animals", sentence: "The rabbit can jump." },
-    { word: "apple", meaning: "蘋果", category: "food", sentence: "I like apples." },
-    { word: "banana", meaning: "香蕉", category: "food", sentence: "I want a banana." },
-    { word: "milk", meaning: "牛奶", category: "food", sentence: "I drink milk." },
-    { word: "red", meaning: "紅色", category: "colors", sentence: "It is red." },
-    { word: "blue", meaning: "藍色", category: "colors", sentence: "I see blue." },
+    { en: "cat", zh: "貓" },
+    { en: "dog", zh: "狗" },
+    { en: "rabbit", zh: "兔子" },
+    { en: "apple", zh: "蘋果" },
+    { en: "banana", zh: "香蕉" },
+    { en: "milk", zh: "牛奶" },
+    { en: "red", zh: "紅色" },
+    { en: "blue", zh: "藍色" },
   ],
 };
 
 const teamColors = ["#e85648", "#138b84", "#3b82f6", "#7c3aed"];
 
 const defaultTeams = [
-  { id: "red", name: "紅隊", color: teamColors[0], position: 0, coins: 300, ownedTiles: [] },
-  { id: "green", name: "綠隊", color: teamColors[1], position: 0, coins: 300, ownedTiles: [] },
-  { id: "blue", name: "藍隊", color: teamColors[2], position: 0, coins: 300, ownedTiles: [] },
+  { id: "red", name: "Red Team", color: teamColors[0], position: 0, coins: 300 },
+  { id: "green", name: "Green Team", color: teamColors[1], position: 0, coins: 300 },
+  { id: "blue", name: "Blue Team", color: teamColors[2], position: 0, coins: 300 },
 ];
 
 const legacyTeamNames = {
-  "Red Team": "紅隊",
-  "Green Team": "綠隊",
-  "Blue Team": "藍隊",
+  "紅隊": "Red Team",
+  "綠隊": "Green Team",
+  "藍隊": "Blue Team",
 };
 
 const tilePath = [
@@ -72,23 +64,23 @@ const boardTypes = [
 
 const tileTypeText = {
   start: "起點",
-  word: "唸單字",
-  sentence: "造句",
-  spell: "拼字",
-  ask: "問答",
-  action: "動作",
-  choose: "選意思",
+  word: "Read the word",
+  sentence: "Make a sentence",
+  spell: "Spell the word",
+  ask: "Answer a question",
+  action: "Performance",
+  choose: "Choose the Answer",
   chance: "機會卡",
 };
 
 const boardTileText = {
   start: { label: "起點", title: "出發", short: "起點", meta: "+100", tooltip: "經過起點有獎勵" },
-  word: { label: "唸單字", title: "唸", short: "唸", meta: "大聲唸", tooltip: "大聲唸出英文單字" },
-  sentence: { label: "造句", title: "句", short: "句", meta: "說句子", tooltip: "用英文造句" },
-  spell: { label: "拼字", title: "拼", short: "拼", meta: "拼英文", tooltip: "拼出英文單字" },
-  ask: { label: "問答", title: "問", short: "問", meta: "問同學", tooltip: "用英文問答" },
-  action: { label: "動作", title: "演", short: "演", meta: "做動作", tooltip: "邊做動作邊說英文" },
-  choose: { label: "選意思", title: "選", short: "選", meta: "選中文", tooltip: "選出英文單字的中文意思" },
+  word: { label: "Read the word", title: "Read", short: "Read", meta: "Read", tooltip: "Read the word" },
+  sentence: { label: "Make a sentence", title: "Make", short: "Make", meta: "Make", tooltip: "Make a sentence" },
+  spell: { label: "Spell the word", title: "Spell", short: "Spell", meta: "Spell", tooltip: "Spell the word" },
+  ask: { label: "Answer a question", title: "Question", short: "Q&A", meta: "Q&A", tooltip: "Answer a question" },
+  action: { label: "Performance", title: "Act", short: "Act", meta: "Act", tooltip: "Performance" },
+  choose: { label: "Choose the Answer", title: "Choose", short: "Choose", meta: "Choose", tooltip: "Choose the Answer" },
   chance: { label: "機會卡", title: "幸運卡", short: "?", meta: "驚喜任務", tooltip: "抽一張驚喜任務卡" },
 };
 
@@ -96,8 +88,13 @@ let state = loadState();
 let toastTimer = null;
 let celebrationTimer = null;
 let memoryFeedbackTimer = null;
+let courseAutosaveTimer = null;
+let courseAutosaveQueued = false;
 let supabaseClient = null;
 let supabaseScriptPromise = null;
+let supabaseLegacyWordPayloadRequired = false;
+let cloudCourseLibrary = [];
+let teacherAccessUnlocked = false;
 const cloudSave = {
   saving: false,
   verifying: false,
@@ -107,6 +104,9 @@ const cloudSave = {
 const courseDelete = {
   pendingCourseId: "",
   deletingCourseId: "",
+};
+const teacherUi = {
+  expandedWordIndexes: new Set(),
 };
 const animation = {
   rolling: false,
@@ -121,7 +121,7 @@ const gameCatalog = {
   monopoly: {
     title: "美語大富翁",
     badge: "多人輪流",
-    summary: "擲骰前進，走到格子後完成唸單字、造句、拼字或機會卡任務。",
+    summary: "擲骰前進，走到格子後完成 Read the word、Make a sentence、Spell the word 或機會卡任務。",
     action: "玩大富翁",
   },
   memory: {
@@ -201,12 +201,26 @@ function freshMemoryState(options = {}) {
 function resetTeams(teams) {
   return structuredClone(teams).map((team, index) => ({
     id: team.id || `team-${index + 1}`,
-    name: team.name || `第 ${index + 1} 隊`,
+    name: normalizeTeamName(team.name, index),
     color: team.color || teamColors[index % teamColors.length],
     position: 0,
     coins: 300,
-    ownedTiles: [],
   }));
+}
+
+function getDefaultTeamName(index) {
+  return `Team ${index + 1}`;
+}
+
+function normalizeTeamName(name, index = 0) {
+  const fallback = getDefaultTeamName(index);
+  const text = String(name || "").trim();
+  if (!text) return fallback;
+
+  const numberedTeam = text.match(/^第\s*(\d+)\s*隊$/);
+  if (numberedTeam) return `Team ${numberedTeam[1]}`;
+
+  return legacyTeamNames[text] || text;
 }
 
 function buildWordDrawPile(wordCount) {
@@ -223,15 +237,15 @@ function buildMemoryCards(pairCount) {
         id: `${pairId}-word`,
         pairId,
         kind: "英文",
-        text: item.word,
-        answer: item.meaning || item.word,
+        text: item.en,
+        answer: item.zh || item.en,
       },
       {
         id: `${pairId}-meaning`,
         pairId,
         kind: "中文",
-        text: item.meaning || item.word,
-        answer: item.word,
+        text: item.zh || item.en,
+        answer: item.en,
       },
     ];
   });
@@ -318,10 +332,8 @@ function ensureGameShape() {
     state.game.started = false;
   }
 
-  state.game.teams.forEach((team) => {
-    if (legacyTeamNames[team.name]) {
-      team.name = legacyTeamNames[team.name];
-    }
+  state.game.teams.forEach((team, index) => {
+    team.name = normalizeTeamName(team.name, index);
     delete team.stars;
   });
 
@@ -370,23 +382,25 @@ function saveState() {
 }
 
 function loadCourseLibrary() {
-  try {
-    const stored = JSON.parse(localStorage.getItem(COURSE_LIBRARY_KEY));
-    if (Array.isArray(stored)) {
-      return stored
-        .map(normalizeSavedCourse)
-        .filter(Boolean)
-        .sort((a, b) => b.updatedAt - a.updatedAt);
-    }
-  } catch (error) {
-    console.warn("Unable to load course library", error);
-  }
-
-  return [];
+  return cloudCourseLibrary
+    .map(normalizeSavedCourse)
+    .filter(Boolean)
+    .sort((a, b) => b.updatedAt - a.updatedAt);
 }
 
 function saveCourseLibrary(courses) {
-  localStorage.setItem(COURSE_LIBRARY_KEY, JSON.stringify(courses));
+  cloudCourseLibrary = Array.isArray(courses)
+    ? courses.map(normalizeSavedCourse).filter(Boolean).sort((a, b) => b.updatedAt - a.updatedAt)
+    : [];
+  clearLegacyLocalCourseLibrary();
+}
+
+function clearLegacyLocalCourseLibrary() {
+  try {
+    localStorage.removeItem(COURSE_LIBRARY_KEY);
+  } catch (error) {
+    console.warn("Unable to clear legacy local course library", error);
+  }
 }
 
 function getSupabaseConfig() {
@@ -462,9 +476,11 @@ async function syncCloudCourseLibrary() {
   try {
     const client = await getSupabaseClientAsync();
     const cloudCourses = await fetchCloudCourses(client);
-    if (!cloudCourses.length) return;
-
-    saveCourseLibrary(mergeCourseLibraries(loadCourseLibrary(), cloudCourses));
+    saveCourseLibrary(cloudCourses);
+    if (!cloudCourses.length) {
+      render();
+      return;
+    }
 
     const course = chooseCloudCourse(cloudCourses);
     let loadedCourseName = "";
@@ -479,14 +495,16 @@ async function syncCloudCourseLibrary() {
     }
     render();
   } catch (error) {
-    console.warn("Unable to load Supabase courses; using localStorage fallback.", error);
+    saveCourseLibrary([]);
+    console.warn("Unable to load Supabase courses.", error);
+    render();
   }
 }
 
 async function fetchCloudCourses(client) {
   const { data: courses, error: coursesError } = await client
     .from("courses")
-    .select("id, slug, name, tags, patterns, ask_patterns, ask_mode, enabled_tasks, created_at, updated_at")
+    .select("id, slug, name, tags, enabled_tasks, created_at, updated_at")
     .eq("is_published", true)
     .order("updated_at", { ascending: false });
 
@@ -499,7 +517,7 @@ async function fetchCloudCourses(client) {
   if (courseIds.length) {
     const { data: words, error: wordsError } = await client
       .from("words")
-      .select("course_id, position, word, meaning, category, sentence, created_at")
+      .select("course_id, position, en, zh, sentence, phonetic, image, created_at")
       .in("course_id", courseIds)
       .order("course_id", { ascending: true })
       .order("position", { ascending: true })
@@ -526,34 +544,12 @@ function mapCloudCourse(course, words) {
       name: course.name,
       slug: course.slug,
       tags: course.tags || [],
-      patterns: course.patterns || [],
-      askMode: course.ask_mode,
-      askPatterns: course.ask_patterns || [],
       enabledTasks: course.enabled_tasks || [],
       words,
     },
     createdAt: Date.parse(course.created_at),
     updatedAt: Date.parse(course.updated_at),
   });
-}
-
-function mergeCourseLibraries(localCourses, cloudCourses) {
-  const merged = [...localCourses];
-
-  cloudCourses.forEach((cloudCourse) => {
-    const cloudSlug = createCourseSlug(cloudCourse.lesson.slug || cloudCourse.lesson.name);
-    const existingIndex = merged.findIndex((course) => (
-      createCourseSlug(course.lesson?.slug || course.lesson?.name) === cloudSlug
-    ));
-
-    if (existingIndex >= 0) {
-      merged[existingIndex] = cloudCourse;
-    } else {
-      merged.unshift(cloudCourse);
-    }
-  });
-
-  return merged.sort((a, b) => b.updatedAt - a.updatedAt);
 }
 
 function chooseCloudCourse(cloudCourses) {
@@ -590,7 +586,7 @@ function setActiveLesson(lesson) {
   state.lesson = normalizeLesson(lesson);
   state.game = freshGameState({
     teams: state.game?.teams?.length ? state.game.teams : defaultTeams,
-    wordCount: state.lesson.words.length,
+    wordCount: getLessonWords().length,
     enabledTasks: state.lesson.enabledTasks,
   });
   state.memory = freshMemoryState({ teams: state.game.teams });
@@ -612,19 +608,11 @@ function ensureCourseEditorShape() {
     ? state.courseEditor
     : freshCourseEditorState("new");
   const mode = editor.mode === "existing" ? "existing" : editor.mode === "new" ? "new" : "";
-  const activeSlug = createCourseSlug(state.lesson?.slug || state.lesson?.name);
   const selectedCourse = findCourseByIdentity(editor.selectedCourseId, editor.lockedSlug)
-    || (!mode ? findCourseBySlug(activeSlug, courses) : null);
+    || getActiveCourseFromLibrary(courses);
 
-  if (mode === "existing" && selectedCourse) {
+  if (selectedCourse && (mode !== "new" || activeLessonMatchesCourse(selectedCourse))) {
     state.courseEditor = freshCourseEditorState("existing", selectedCourse);
-    state.lesson.slug = state.courseEditor.lockedSlug;
-    return;
-  }
-
-  if (!mode && selectedCourse) {
-    state.courseEditor = freshCourseEditorState("existing", selectedCourse);
-    state.lesson.slug = state.courseEditor.lockedSlug;
     return;
   }
 
@@ -633,22 +621,17 @@ function ensureCourseEditorShape() {
 
 function setCourseEditorCourse(course) {
   state.courseEditor = freshCourseEditorState("existing", course);
-  if (state.courseEditor.lockedSlug) {
-    state.lesson.slug = state.courseEditor.lockedSlug;
-  }
 }
 
 function setCourseEditorForLesson(lesson, preferredCourse = null) {
   const course = preferredCourse || findCourseBySlug(lesson?.slug || lesson?.name);
   state.courseEditor = course ? freshCourseEditorState("existing", course) : freshCourseEditorState("new");
-  if (course) {
-    state.lesson.slug = state.courseEditor.lockedSlug;
-  }
 }
 
 function getSelectedCourse() {
   const editor = state.courseEditor || {};
-  return findCourseByIdentity(editor.selectedCourseId, editor.lockedSlug);
+  return findCourseByIdentity(editor.selectedCourseId, editor.lockedSlug)
+    || getActiveCourseFromLibrary();
 }
 
 function findCourseByIdentity(courseId, slug, courses = loadCourseLibrary()) {
@@ -667,6 +650,21 @@ function findCourseBySlug(slug, courses = loadCourseLibrary()) {
   )) || null;
 }
 
+function getActiveCourseFromLibrary(courses = loadCourseLibrary()) {
+  const activeCourse = findCourseBySlug(state.lesson?.slug || state.lesson?.name, courses);
+  return activeCourse && activeLessonMatchesCourse(activeCourse) ? activeCourse : null;
+}
+
+function activeLessonMatchesCourse(course) {
+  const activeSlug = createCourseSlug(state.lesson?.slug || state.lesson?.name);
+  const courseSlug = createCourseSlug(course?.lesson?.slug || course?.lesson?.name);
+  if (!activeSlug || activeSlug !== courseSlug) return false;
+
+  const activeName = String(state.lesson?.name || "").trim();
+  const courseName = String(course?.lesson?.name || "").trim();
+  return !activeName || !courseName || activeName === courseName;
+}
+
 function isEditingExistingCourse() {
   return state.courseEditor?.mode === "existing" && Boolean(getSelectedCourse());
 }
@@ -676,9 +674,6 @@ function createBlankLesson() {
     name: "新課程",
     slug: createUniqueCourseSlug("new-course"),
     tags: [],
-    patterns: ["I see a ___ ."],
-    askMode: "auto",
-    askPatterns: [...defaultLesson.askPatterns],
     enabledTasks: [...defaultLesson.enabledTasks],
     words: [],
   };
@@ -703,11 +698,13 @@ function createUniqueCourseSlug(baseSlug, ignoreCourseId = "") {
 
 function normalizeSavedCourse(course) {
   if (!course) return null;
+  const id = String(course.id || "").trim();
+  if (!id) return null;
   const lesson = normalizeLesson(course.lesson || course);
   if (!lesson.name && !lesson.words.length) return null;
 
   return {
-    id: course.id || createCourseId(),
+    id,
     lesson,
     createdAt: Number(course.createdAt) || Date.now(),
     updatedAt: Number(course.updatedAt) || Date.now(),
@@ -725,23 +722,7 @@ function normalizeTaskList(tasks, fallback = ["say"]) {
   return uniqueTasks.length ? uniqueTasks : [...new Set(fallbackTasks.length ? fallbackTasks : ["say"])];
 }
 
-function normalizeAskMode(mode) {
-  return askModeLabels[mode] ? mode : "auto";
-}
-
-function normalizeTextList(value, fallback = []) {
-  const items = Array.isArray(value)
-    ? value
-    : String(value || "").split(/\r?\n/);
-  const normalized = items
-    .map((item) => String(item || "").trim())
-    .filter(Boolean);
-  return normalized.length ? normalized : fallback;
-}
-
 function normalizeLesson(lesson) {
-  const patterns = normalizeTextList(lesson?.patterns, ["I see a ___ ."]);
-  const askPatterns = normalizeTextList(lesson?.askPatterns, defaultLesson.askPatterns);
   const enabledTasks = normalizeTaskList(lesson?.enabledTasks, ["say", "sentence", "spell"]);
   const name = String(lesson?.name || "Untitled lesson").trim() || "Untitled lesson";
   const tags = Array.isArray(lesson?.tags)
@@ -753,19 +734,11 @@ function normalizeLesson(lesson) {
     name,
     slug,
     tags,
-    patterns: patterns.length ? patterns : ["I see a ___ ."],
-    askMode: normalizeAskMode(lesson?.askMode),
-    askPatterns,
     enabledTasks: enabledTasks.length ? enabledTasks : ["say"],
     words: Array.isArray(lesson?.words)
-      ? lesson.words.map(normalizeWord).filter((item) => item.word)
+      ? lesson.words.map(normalizeWord).filter((item) => item.en || item.zh)
       : [],
   };
-}
-
-function createCourseId() {
-  if (window.crypto?.randomUUID) return window.crypto.randomUUID();
-  return `course-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
 function createCourseSlug(value) {
@@ -865,14 +838,19 @@ function renderTopbar() {
   const busy = isBusy() || (state.activeGame === "memory" && state.memory?.locked);
   const actions = state.view === "teacher" ? renderTeacherTopbarActions(busy) : renderGameTopbarActions(busy);
   const gameCompact = state.view === "game" && isActiveGameStarted();
+  const teacherLocked = state.view === "teacher" && !isTeacherUnlocked();
+  const title = teacherLocked ? "老師後台" : state.lesson.name || "兒童美語大富翁";
+  const meta = teacherLocked
+    ? "請先輸入寫入密碼"
+    : `${getLessonWords().length} words · ${state.game.teams.length} teams · Round ${state.game.round}`;
 
   return `
     <header class="topbar ${gameCompact ? "topbar-game-compact" : ""}">
       <div class="brand ${gameCompact ? "brand-game-compact" : ""}">
         <div class="brand-mark"><span>ABC</span></div>
         <div>
-          <h1>${escapeHtml(state.lesson.name || "兒童美語大富翁")}</h1>
-          <p>${state.lesson.words.length} 個單字 · ${state.game.teams.length} 隊 · 第 ${state.game.round} 回合</p>
+          <h1>${escapeHtml(title)}</h1>
+          <p>${escapeHtml(meta)}</p>
         </div>
       </div>
       ${actions ? `<div class="quick-actions">${actions}</div>` : ""}
@@ -891,6 +869,9 @@ function renderGameTopbarActions(busy) {
 }
 
 function renderTeacherTopbarActions(busy) {
+  if (!isTeacherUnlocked()) {
+    return "";
+  }
   return `<button class="ghost-button" data-action="load-demo" ${busy ? "disabled" : ""}>載入範例</button>`;
 }
 
@@ -954,7 +935,7 @@ function renderMonopolyGame() {
       <aside class="side-panel">
         <section class="current-turn-panel">
           <div class="panel-title">
-            <h2>目前隊伍</h2>
+            <h2>Current Team</h2>
             <span class="turn-badge">
               <span class="team-dot" style="--team-color:${currentTeam.color}"></span>
               ${escapeHtml(currentTeam.name)}
@@ -972,14 +953,10 @@ function renderMonopolyGame() {
             <strong>${state.game.dice}</strong>
             <span>骰子</span>
           </div>
-          <div class="metric">
-            <strong>${totalOwnedTiles()}</strong>
-            <span>已獲得地點</span>
-          </div>
         </section>
         <section class="team-status-panel">
           <div class="panel-title">
-            <h2>隊伍狀態</h2>
+            <h2>Team Status</h2>
           </div>
           <div class="team-list">
             ${state.game.teams.map((team, index) => renderTeamRow(team, index)).join("")}
@@ -1024,15 +1001,15 @@ function renderGameSetupPanel(busy) {
         </div>
         <div class="setup-block">
           <div class="setup-block-head">
-            <span class="check-label">隊伍設定</span>
-            <button class="ghost-button" type="button" data-action="add-team" ${busy ? "disabled" : ""}>新增隊伍</button>
+            <span class="check-label">Team Settings</span>
+            <button class="ghost-button" type="button" data-action="add-team" ${busy ? "disabled" : ""}>Add Team</button>
           </div>
           <div class="team-edit-list">
             ${state.game.teams.map((team, index) => `
               <div class="team-edit-row">
                 <input type="color" value="${escapeAttr(team.color)}" data-action="edit-team" data-index="${index}" data-field="color" aria-label="${escapeAttr(team.name)} color" ${busy ? "disabled" : ""} />
-                <input value="${escapeAttr(team.name)}" data-action="edit-team" data-index="${index}" data-field="name" aria-label="隊伍名稱 ${index + 1}" ${busy ? "disabled" : ""} />
-                <button class="mini-button" type="button" data-action="delete-team" data-index="${index}" ${state.game.teams.length <= 1 || busy ? "disabled" : ""}>刪除</button>
+                <input value="${escapeAttr(team.name)}" data-action="edit-team" data-index="${index}" data-field="name" aria-label="Team name ${index + 1}" ${busy ? "disabled" : ""} />
+                <button class="mini-button" type="button" data-action="delete-team" data-index="${index}" ${state.game.teams.length <= 1 || busy ? "disabled" : ""}>Delete</button>
               </div>
             `).join("")}
           </div>
@@ -1073,7 +1050,7 @@ function renderMemoryGame() {
         <aside class="memory-side-panel">
           <section class="team-status-panel">
             <div class="panel-title">
-              <h2>隊伍分數</h2>
+              <h2>Team Scores</h2>
             </div>
             <div class="team-list">
               ${state.game.teams.map((team, index) => renderMemoryTeamRow(team, index)).join("")}
@@ -1115,15 +1092,15 @@ function renderMemorySetupPanel(busy) {
         </div>
         <div class="setup-block">
           <div class="setup-block-head">
-            <span class="check-label">隊伍設定</span>
-            <button class="ghost-button" type="button" data-action="add-team" ${busy ? "disabled" : ""}>新增隊伍</button>
+            <span class="check-label">Team Settings</span>
+            <button class="ghost-button" type="button" data-action="add-team" ${busy ? "disabled" : ""}>Add Team</button>
           </div>
           <div class="team-edit-list">
             ${state.game.teams.map((team, index) => `
               <div class="team-edit-row">
                 <input type="color" value="${escapeAttr(team.color)}" data-action="edit-team" data-index="${index}" data-field="color" aria-label="${escapeAttr(team.name)} color" ${busy ? "disabled" : ""} />
-                <input value="${escapeAttr(team.name)}" data-action="edit-team" data-index="${index}" data-field="name" aria-label="隊伍名稱 ${index + 1}" ${busy ? "disabled" : ""} />
-                <button class="mini-button" type="button" data-action="delete-team" data-index="${index}" ${state.game.teams.length <= 1 || busy ? "disabled" : ""}>刪除</button>
+                <input value="${escapeAttr(team.name)}" data-action="edit-team" data-index="${index}" data-field="name" aria-label="Team name ${index + 1}" ${busy ? "disabled" : ""} />
+                <button class="mini-button" type="button" data-action="delete-team" data-index="${index}" ${state.game.teams.length <= 1 || busy ? "disabled" : ""}>Delete</button>
               </div>
             `).join("")}
           </div>
@@ -1169,7 +1146,7 @@ function renderMemoryTeamRow(team, index) {
       <div class="team-avatar">${escapeHtml(team.name.charAt(0))}</div>
       <div>
         <div class="team-name">${escapeHtml(team.name)}</div>
-        <div class="team-stats">配對 ${state.memory.scores[team.id] || 0} 組</div>
+        <div class="team-stats">Matches ${state.memory.scores[team.id] || 0}</div>
       </div>
       <div class="score-pill">${state.memory.scores[team.id] || 0}</div>
     </div>
@@ -1182,7 +1159,7 @@ function renderMemoryFeedback() {
   const neutralTeam = getMemoryTeam();
   const type = feedback?.type || "neutral";
   const mark = feedback ? (feedback.type === "success" ? "+1" : "換") : "輪";
-  const message = feedback?.message || `${neutralTeam.name} 翻兩張牌`;
+  const message = feedback?.message || `${neutralTeam.name} flips two cards`;
   const team = feedback
     ? state.game.teams.find((item) => item.id === feedback.teamId)
     : neutralTeam;
@@ -1205,7 +1182,7 @@ function renderMobileDock(currentTeam, busy, rollLabel) {
           <span class="team-dot" style="--team-color:${currentTeam.color}"></span>
           ${escapeHtml(currentTeam.name)}
         </span>
-        <span class="mobile-round">第 ${state.game.round} 回合</span>
+        <span class="mobile-round">Round ${state.game.round}</span>
       </div>
       <div class="mobile-action-grid">
         <button class="primary-button roll-button" data-action="roll" ${busy || state.game.phase === "task" ? "disabled" : ""}>${rollLabel}</button>
@@ -1219,23 +1196,21 @@ function renderMobileDock(currentTeam, busy, rollLabel) {
 function renderTiles() {
   return tilePath.map(([column, row], index) => {
     const tile = getTile(index);
-    const owner = getTileOwner(index);
     const hasPawns = state.game.teams.some((team) => team.position === index);
     const current = state.game.currentTile === index && (state.game.phase === "task" || animation.movingTeamId);
     const classes = [
       "tile",
       `is-${tile.type}`,
-      owner ? "is-owned" : "",
       hasPawns ? "has-pawns" : "",
       current ? "is-current" : "",
     ].filter(Boolean).join(" ");
 
     return `
-      <div class="${classes}" data-tile-index="${index}" style="grid-column:${column};grid-row:${row};--owner-color:${owner ? owner.color : "transparent"}">
+      <div class="${classes}" data-tile-index="${index}" style="grid-column:${column};grid-row:${row}">
         <div class="tile-label">${escapeHtml(tile.label)}</div>
         <div class="tile-word tile-word-full" title="${escapeAttr(tile.tooltip)}">${renderTileBoardTitle(tile)}</div>
         <div class="tile-word-short" title="${escapeAttr(tile.tooltip)}">${renderTileShortWord(tile)}</div>
-        <div class="tile-meta">${owner ? escapeHtml(owner.name) : escapeHtml(tile.meta)}</div>
+        <div class="tile-meta">${escapeHtml(tile.meta)}</div>
         <div class="pawns">
           ${renderPawnsForTile(index)}
         </div>
@@ -1278,9 +1253,7 @@ function renderMissionCard() {
       <section class="mission-card">
         ${renderDiceFace()}
         <div class="mission-kicker">兒童美語大富翁</div>
-        <h2 class="mission-title">${animation.rolling ? "骰子轉動中" : animation.movingTeamId ? "棋子前進中" : "準備好了嗎？"}</h2>
-        <p class="mission-prompt">${animation.movingTeamId ? "大家一起數格子。" : "輪到的隊伍擲骰，走到格子後完成英文任務。"}</p>
-        <p class="mission-support">答對可以拿獎勵，下一隊接著挑戰。</p>
+        <h2 class="mission-title">${animation.rolling ? "骰子轉動中" : animation.movingTeamId ? "棋子前進中" : "Ready?"}</h2>
       </section>
     `;
   }
@@ -1368,7 +1341,7 @@ function renderTeamRow(team, index) {
       <div class="team-avatar">${escapeHtml(team.name.charAt(0))}</div>
       <div>
         <div class="team-name">${escapeHtml(team.name)}</div>
-        <div class="team-stats">拿到 ${team.ownedTiles.length} 格 · 位置 ${team.position}</div>
+        <div class="team-stats">Position ${team.position}</div>
       </div>
       <div class="score-pill">$${team.coins}</div>
     </div>
@@ -1376,145 +1349,211 @@ function renderTeamRow(team, index) {
 }
 
 function renderTeacher() {
+  if (!isTeacherUnlocked()) {
+    return renderTeacherAuthGate();
+  }
+
   const busy = isBusy();
-  const slugLocked = isEditingExistingCourse();
   return `
     <section class="teacher-layout">
-      <aside class="teacher-panel">
+      <aside class="teacher-panel teacher-course-panel">
         <div class="panel-title">
           <div>
-            <div class="section-kicker">教材準備</div>
-            <h2>課程設定</h2>
+            <div class="section-kicker">雲端管理</div>
+            <h2>課程資料庫</h2>
           </div>
           <button class="primary-button" data-action="go-game-url" ${busy ? "disabled" : ""}>前往遊戲入口</button>
         </div>
         ${renderCourseEditorPanel()}
+        ${renderCourseLibrary()}
+      </aside>
+      <section class="teacher-panel teacher-lesson-panel">
+        <div class="panel-title">
+          <div>
+            <div class="section-kicker">課程內容</div>
+            <h2>設定與單字</h2>
+          </div>
+        </div>
+        <div class="teacher-subhead">
+          <div>
+            <div class="section-kicker">基本資料</div>
+            <h3>課程設定</h3>
+          </div>
+        </div>
         <div class="form-grid">
           <div class="field">
             <label for="lessonName">課程名稱</label>
             <input id="lessonName" value="${escapeAttr(state.lesson.name)}" data-action="edit-lesson" data-field="name" />
           </div>
           <div class="field">
-            <label for="lessonSlug">課程網址代碼${slugLocked ? "（已鎖定）" : ""}</label>
-            <input id="lessonSlug" value="${escapeAttr(state.lesson.slug || "")}" data-action="edit-lesson" data-field="slug" placeholder="unit-1-animals-food" ${slugLocked ? "readonly" : ""} />
+            <label for="lessonSlug">課程網址代碼</label>
+            <input id="lessonSlug" value="${escapeAttr(state.lesson.slug || "")}" data-action="edit-lesson" data-field="slug" placeholder="unit-1-animals-food" />
           </div>
-          <div class="field">
+          <div class="field is-wide">
             <label for="lessonTags">課程標籤，用逗號分隔</label>
             <input id="lessonTags" value="${escapeAttr((state.lesson.tags || []).join(", "))}" data-action="edit-tags" placeholder="animals, food, phonics" />
           </div>
-          <div class="field">
-            <label for="patterns">參考句型，每行一個，用 ___ 代表單字</label>
-            <textarea id="patterns" data-action="edit-patterns">${escapeHtml(state.lesson.patterns.join("\n"))}</textarea>
-          </div>
-          ${renderAskSettings()}
         </div>
-        ${renderCourseLibrary()}
-      </aside>
-      <section class="teacher-panel">
-        <div class="panel-title">
+        ${renderCourseReadinessNotice()}
+        <div class="teacher-subhead word-bank-head">
           <div>
-            <div class="section-kicker">題庫管理</div>
-            <h2>單字題庫</h2>
-          </div>
-          <button class="primary-button" data-action="export-csv">匯出 CSV</button>
-        </div>
-        <form class="word-tools" data-action="add-word-form">
-          <input name="word" placeholder="word" autocomplete="off" />
-          <input name="meaning" placeholder="中文提示" autocomplete="off" />
-          <input name="category" placeholder="分類" autocomplete="off" />
-          <input name="sentence" placeholder="例句" autocomplete="off" />
-          <button class="success-button" type="submit" data-action="add-word">新增</button>
-        </form>
-        ${renderWordTable()}
-        <div class="import-box">
-          <label class="small-label" for="csvInput">貼上 CSV：word, meaning, category, sentence</label>
-          <textarea id="csvInput" placeholder="cat,貓,animals,This is a cat."></textarea>
-          <div class="button-row">
-            <button class="ghost-button" data-action="import-csv">匯入 CSV</button>
-            <button class="ghost-button" data-action="clear-words">清空單字</button>
+            <div class="section-kicker">單字內容</div>
+            <h3>單字題庫</h3>
           </div>
         </div>
+        ${renderWordEditor()}
+        ${renderCsvPanel()}
       </section>
     </section>
   `;
 }
 
-function renderCourseEditorPanel() {
-  const courses = loadCourseLibrary();
-  const selectedCourse = getSelectedCourse();
-  const isExisting = isEditingExistingCourse();
-  const modeLabel = isExisting ? "更新既有課程" : "建立新課程";
-  const activeSlug = createCourseSlug(state.lesson.slug || state.lesson.name);
+function isTeacherUnlocked() {
+  return teacherAccessUnlocked && Boolean(getTeacherWriteToken());
+}
+
+function renderTeacherAuthGate() {
+  const token = getTeacherWriteToken();
+  const verifying = cloudSave.verifying;
+  const status = getTeacherWriteTokenStatus();
+  const placeholder = token ? "本分頁已記住密碼" : "輸入老師寫入密碼";
 
   return `
-    <section class="course-editor-panel">
-      <div class="course-editor-head">
-        <div>
-          <div class="section-kicker">課程工作區</div>
-          <h3>${escapeHtml(state.lesson.name || "新課程")}</h3>
-          <span>${escapeHtml(activeSlug)} · ${state.lesson.words.length} 個單字</span>
+    <section class="teacher-auth-layout">
+      <div class="teacher-auth-panel">
+        <div class="section-kicker">老師後台</div>
+        <h2>輸入密碼進入</h2>
+        <p>後台課程只會讀寫 Supabase 雲端資料。密碼通過後才能編輯、刪除或同步課程。</p>
+        <div class="cloud-token-row teacher-auth-row">
+          <input id="teacherWriteToken" type="password" data-action="teacher-token-input" placeholder="${escapeAttr(placeholder)}" autocomplete="current-password" ${verifying ? "disabled" : ""} autofocus />
+          <button class="primary-button" type="button" data-action="verify-teacher-token" ${verifying || !token ? "disabled" : ""}>${verifying ? "驗證中" : "進入後台"}</button>
         </div>
-        <span class="course-mode-pill ${isExisting ? "is-existing" : "is-new"}">${modeLabel}</span>
-      </div>
-      <div class="course-picker-row">
-        <label class="small-label" for="coursePicker">先選課程</label>
-        <select id="coursePicker" data-action="select-course" ${courses.length ? "" : "disabled"}>
-          <option value="">${courses.length ? "選擇要編輯的課程" : "目前沒有已儲存課程"}</option>
-          ${courses.map((course) => `
-            <option value="${escapeAttr(course.id)}" ${selectedCourse?.id === course.id ? "selected" : ""}>
-              ${escapeHtml(course.lesson.name)} · ${escapeHtml(course.lesson.slug || "my-course")}
-            </option>
-          `).join("")}
-        </select>
-      </div>
-      <div class="course-editor-actions">
-        <button class="ghost-button" type="button" data-action="start-new-course">建立新課程</button>
-        <button class="ghost-button" type="button" data-action="duplicate-course">另存為新課程</button>
-        <button class="ghost-button" type="button" data-action="copy-current-course-link" ${activeSlug ? "" : "disabled"}>複製前台連結</button>
+        <div class="teacher-auth-footer">
+          <span class="cloud-token-status ${status.className}" role="status" aria-live="polite">${escapeHtml(status.message)}</span>
+          <button class="plain-button" type="button" data-action="go-game-url">回遊戲入口</button>
+        </div>
       </div>
     </section>
   `;
 }
 
-function renderAskSettings() {
-  const mode = normalizeAskMode(state.lesson.askMode);
-  const preview = getAskPreview();
+function renderCourseEditorPanel() {
+  const isExisting = isEditingExistingCourse();
+  const modeLabel = isExisting ? "雲端課程" : "新課程草稿";
+  const activeSlug = createCourseSlug(state.lesson.slug || state.lesson.name);
+  const wordCount = getLessonWords().length;
 
   return `
-    <div class="field">
-      <label for="askMode">問答任務模式</label>
-      <select id="askMode" data-action="edit-ask-mode">
-        ${Object.entries(askModeLabels).map(([key, label]) => `
-          <option value="${key}" ${mode === key ? "selected" : ""}>${label}</option>
-        `).join("")}
-      </select>
-    </div>
-    ${mode === "template" ? `
-      <div class="field">
-        <label for="askPatterns">問答句型，每行一個，用 ___ 代表單字</label>
-        <textarea id="askPatterns" class="compact-textarea" data-action="edit-ask-patterns">${escapeHtml(getAskPatterns().join("\n"))}</textarea>
+    <section class="course-editor-panel">
+      <div class="course-editor-head">
+        <div class="course-editor-title">
+          <div class="section-kicker">目前課程</div>
+          <h3>${escapeHtml(state.lesson.name || "新課程")}</h3>
+          <span class="course-editor-meta">${escapeHtml(activeSlug)} · ${wordCount} 個單字</span>
+        </div>
+        <span class="course-mode-pill ${isExisting ? "is-existing" : "is-new"}">${modeLabel}</span>
       </div>
-    ` : ""}
-    ${preview ? `
-      <div class="ask-preview">
-        <span>問答預覽</span>
-        <strong>${escapeHtml(preview.title)}</strong>
-        <p>${escapeHtml(preview.prompt)}</p>
-        <small>${escapeHtml(preview.basis)}</small>
+      ${renderCourseSyncPanel()}
+      <div class="course-editor-actions">
+        <button class="ghost-button" type="button" data-action="start-new-course">開新課程草稿</button>
+        <button class="ghost-button" type="button" data-action="duplicate-course">複製成新草稿</button>
+        <button class="ghost-button" type="button" data-action="copy-current-course-link" ${activeSlug ? "" : "disabled"}>複製遊戲連結</button>
       </div>
-    ` : ""}
+    </section>
   `;
 }
 
-function getAskPreview() {
-  const word = getLessonWords()[0];
-  if (!word) return null;
-  const askContent = buildAskContent(word, { preferFirstPattern: true });
-  return {
-    title: word.word,
-    prompt: askContent.question,
-    basis: askContent.basis,
-  };
+function renderCourseReadinessNotice() {
+  const playableWords = getLessonWords();
+  const incompleteWords = getIncompleteWords();
+  const messages = [];
+
+  if (!playableWords.length) {
+    messages.push({ tone: "warning", text: "至少需要一筆 en + zh 完整的單字，課程才可以玩。" });
+  }
+
+  if (incompleteWords.length) {
+    messages.push({ tone: "warning", text: `${incompleteWords.length} 筆單字缺少 en 或 zh，存檔前請補齊。` });
+  }
+
+  if (!messages.length) return "";
+
+  return `
+    <div class="course-notice-list">
+      ${messages.map((item) => `<p class="course-notice is-${item.tone}">${escapeHtml(item.text)}</p>`).join("")}
+    </div>
+  `;
+}
+
+function renderWordEditor() {
+  const words = Array.isArray(state.lesson.words) ? state.lesson.words : [];
+
+  return `
+    <form class="word-tools" data-action="add-word-form">
+      <input name="en" placeholder="en" autocomplete="off" />
+      <input name="zh" placeholder="中文提示" autocomplete="off" />
+      <button class="success-button" type="submit" data-action="add-word">新增</button>
+    </form>
+    ${words.length ? `
+      <div class="word-editor-list">
+        <div class="word-editor-head">
+          <span></span>
+          <span>en</span>
+          <span>zh</span>
+          <span></span>
+        </div>
+        ${words.map((item, index) => renderWordEditorRow(item, index)).join("")}
+      </div>
+    ` : `<div class="empty-state">目前沒有單字。先新增 en + zh，或從 CSV 匯入。</div>`}
+  `;
+}
+
+function renderWordEditorRow(item, index) {
+  const word = normalizeWord(item);
+  const expanded = teacherUi.expandedWordIndexes.has(index);
+
+  return `
+    <div class="word-editor-row ${expanded ? "is-expanded" : ""}">
+      <div class="word-main-grid">
+        <button class="word-expand-button" type="button" data-action="toggle-word-extra" data-index="${index}" aria-expanded="${expanded}">${expanded ? "▾" : "▸"}</button>
+        <input value="${escapeAttr(word.en)}" data-action="edit-word" data-index="${index}" data-field="en" placeholder="season" />
+        <input value="${escapeAttr(word.zh)}" data-action="edit-word" data-index="${index}" data-field="zh" placeholder="季節" />
+        <button class="mini-button" type="button" data-action="delete-word" data-index="${index}">刪除</button>
+      </div>
+      ${expanded ? `
+        <div class="word-extra-grid">
+          <div class="field">
+            <label>phonetic</label>
+            <input value="${escapeAttr(word.phonetic)}" data-action="edit-word" data-index="${index}" data-field="phonetic" placeholder="/ˈsiːzən/" />
+          </div>
+          <div class="field">
+            <label>image</label>
+            <input value="${escapeAttr(word.image)}" data-action="edit-word" data-index="${index}" data-field="image" placeholder="https://..." />
+          </div>
+        </div>
+      ` : ""}
+    </div>
+  `;
+}
+
+function renderCsvPanel() {
+  return `
+    <div class="teacher-subhead lesson-section-head">
+      <div>
+        <div class="section-kicker">匯入匯出</div>
+        <h3>CSV</h3>
+      </div>
+      <button class="primary-button" type="button" data-action="export-csv">匯出 CSV</button>
+    </div>
+    <div class="import-box">
+      <label class="small-label" for="csvInput">貼上 CSV：英文單字, 中文提示</label>
+      <textarea id="csvInput" placeholder="season,季節"></textarea>
+      <div class="button-row">
+        <button class="ghost-button" data-action="import-csv">匯入 CSV</button>
+        <button class="ghost-button" data-action="clear-words">清空單字</button>
+      </div>
+    </div>
+  `;
 }
 
 function renderCourseLibrary() {
@@ -1524,47 +1563,44 @@ function renderCourseLibrary() {
     <section class="course-library">
       <div class="course-library-head">
         <div>
-          <div class="section-kicker">課程庫</div>
-          <h3>已儲存課程</h3>
+          <div class="section-kicker">雲端課程</div>
+          <h3>Supabase 課程清單</h3>
         </div>
+        <span class="course-count-pill">${courses.length} 門</span>
       </div>
-      ${renderCloudWritePanel()}
       ${courses.length ? `
         <div class="course-list">
           ${courses.map((course) => renderSavedCourse(course)).join("")}
         </div>
-      ` : `<div class="empty-state course-empty">還沒有儲存課程，先設定單字後按「儲存到 Supabase」。</div>`}
+      ` : `<div class="empty-state course-empty">目前沒有 Supabase 課程。建立目前課程後會顯示在這裡。</div>`}
     </section>
   `;
 }
 
-function renderCloudWritePanel() {
-  const token = getTeacherWriteToken();
+function renderCourseSyncPanel() {
   const saving = cloudSave.saving;
-  const verifying = cloudSave.verifying;
-  const disabled = saving || verifying;
+  const disabled = saving || cloudSave.verifying;
   const status = getTeacherWriteTokenStatus();
-  const placeholder = token ? "本分頁已記住密碼" : "輸入老師寫入密碼";
   const saveLabel = getCloudSaveButtonLabel();
+  const isExisting = isEditingExistingCourse();
 
   return `
-    <div class="cloud-write-panel">
-      <div class="cloud-write-header">
-        <label class="small-label" for="teacherWriteToken">Supabase 寫入</label>
-        <span class="cloud-token-status ${status.className}" role="status" aria-live="polite">${escapeHtml(status.message)}</span>
+    <div class="course-sync-panel">
+      <div class="course-sync-status">
+        <div class="small-label">雲端同步</div>
+        <div class="cloud-token-status ${status.className}" role="status" aria-live="polite">${escapeHtml(status.message)}</div>
       </div>
-      <div class="cloud-token-row">
-        <input id="teacherWriteToken" type="password" data-action="teacher-token-input" placeholder="${escapeAttr(placeholder)}" autocomplete="current-password" ${disabled ? "disabled" : ""} />
-        <button class="ghost-button" type="button" data-action="verify-teacher-token" ${disabled || !token ? "disabled" : ""}>${verifying ? "驗證中" : "驗證"}</button>
-        <button class="plain-button" type="button" data-action="clear-teacher-token" ${disabled || !token ? "disabled" : ""}>清除</button>
+      <div class="course-sync-actions">
+        <button class="success-button cloud-save-button" type="button" data-action="save-course" ${disabled ? "disabled" : ""}>${saving ? "同步中" : saveLabel}</button>
+        <button class="plain-button" type="button" data-action="clear-teacher-token" ${disabled ? "disabled" : ""}>登出後台</button>
       </div>
-      <button class="success-button cloud-save-button" type="button" data-action="save-course" ${disabled ? "disabled" : ""}>${saving ? "寫入中" : saveLabel}</button>
+      ${isExisting ? "" : `<p class="course-sync-note">尚未建立到 Supabase；目前是草稿。</p>`}
     </div>
   `;
 }
 
 function getCloudSaveButtonLabel() {
-  return isEditingExistingCourse() ? "更新這門課程到 Supabase" : "建立新課程到 Supabase";
+  return isEditingExistingCourse() ? "同步到 Supabase" : "建立到 Supabase";
 }
 
 function getTeacherWriteTokenStatus() {
@@ -1578,15 +1614,15 @@ function getTeacherWriteTokenStatus() {
 
   const token = getTeacherWriteToken();
   if (!token) {
-    return { className: "is-muted", message: "尚未輸入寫入密碼；課程會先保存在本機。" };
+    return { className: "is-muted", message: "尚未輸入寫入密碼；課程只會寫入 Supabase，不再建立本機課程。" };
   }
 
   if (cloudSave.tokenStatus === "verified") {
-    return { className: "is-ok", message: cloudSave.tokenMessage || "密碼已驗證，可以寫入 Supabase。" };
+    return { className: "is-ok", message: cloudSave.tokenMessage || "已登入後台，可以同步 Supabase。" };
   }
 
   if (cloudSave.tokenStatus === "saved") {
-    return { className: "is-ok", message: cloudSave.tokenMessage || "已成功寫入 Supabase。" };
+    return { className: "is-ok", message: cloudSave.tokenMessage || "已同步到 Supabase。" };
   }
 
   if (cloudSave.tokenStatus === "invalid") {
@@ -1598,10 +1634,10 @@ function getTeacherWriteTokenStatus() {
   }
 
   if (cloudSave.tokenStatus === "pending") {
-    return { className: "is-muted", message: cloudSave.tokenMessage || "尚未驗證；按「驗證」確認密碼。" };
+    return { className: "is-muted", message: cloudSave.tokenMessage || "尚未完成登入，請重新進入後台。" };
   }
 
-  return { className: "is-muted", message: "本分頁已有寫入密碼，按「驗證」可確認是否正確。" };
+  return { className: "is-muted", message: "本分頁已記住密碼，可以同步 Supabase。" };
 }
 
 function renderSavedCourse(course) {
@@ -1609,17 +1645,31 @@ function renderSavedCourse(course) {
   const selected = getSelectedCourse()?.id === course.id;
   const pendingDelete = courseDelete.pendingCourseId === course.id;
   const deleting = courseDelete.deletingCourseId === course.id;
+  const tags = Array.isArray(lesson.tags) ? lesson.tags.filter(Boolean) : [];
+  const metaItems = [
+    `${lesson.words.filter(isCompleteWord).length} 個單字`,
+    formatSavedAt(course.updatedAt),
+  ];
+
   return `
     <article class="course-item ${selected ? "is-selected" : ""} ${pendingDelete ? "is-delete-pending" : ""}">
       <div class="course-info">
-        <strong>${escapeHtml(lesson.name)}</strong>
-        <span>${lesson.words.length} 個單字 · ${lesson.patterns.length} 參考句型 · ${formatSavedAt(course.updatedAt)}</span>
-        <span>${escapeHtml(lesson.slug || "my-course")} ${lesson.tags?.length ? `· ${lesson.tags.map((tag) => `#${escapeHtml(tag)}`).join(" ")}` : ""}</span>
-        ${pendingDelete ? `<span class="course-delete-warning">將刪除雲端課程與全部單字</span>` : ""}
+        <div class="course-title-row">
+          <strong>${escapeHtml(lesson.name)}</strong>
+          ${selected ? `<span class="course-selected-badge">編輯中</span>` : ""}
+        </div>
+        <div class="course-meta-row">
+          ${metaItems.map((item) => `<span>${escapeHtml(item)}</span>`).join("")}
+        </div>
+        <div class="course-slug-row">
+          <span class="course-slug">${escapeHtml(lesson.slug || "my-course")}</span>
+          ${tags.map((tag) => `<span class="course-tag">#${escapeHtml(tag)}</span>`).join("")}
+        </div>
+        ${pendingDelete ? `<span class="course-delete-warning">將從 Supabase 刪除此課程與全部單字</span>` : ""}
       </div>
       <div class="course-actions">
-        <button class="ghost-button" type="button" data-action="copy-course-link" data-course-slug="${escapeAttr(lesson.slug || lesson.name)}">前台連結</button>
-        <button class="ghost-button" type="button" data-action="load-course" data-course-id="${escapeAttr(course.id)}">${selected ? "編輯中" : "載入"}</button>
+        <button class="ghost-button" type="button" data-action="copy-course-link" data-course-slug="${escapeAttr(lesson.slug || lesson.name)}">複製連結</button>
+        <button class="ghost-button" type="button" data-action="load-course" data-course-id="${escapeAttr(course.id)}" ${selected ? "disabled" : ""}>${selected ? "正在編輯" : "編輯"}</button>
         ${pendingDelete ? `
           <button class="ghost-button" type="button" data-action="cancel-delete-course" data-course-id="${escapeAttr(course.id)}" ${deleting ? "disabled" : ""}>取消</button>
           <button class="mini-button is-danger" type="button" data-action="confirm-delete-course" data-course-id="${escapeAttr(course.id)}" ${deleting ? "disabled" : ""}>${deleting ? "刪除中" : "確認刪除"}</button>
@@ -1628,39 +1678,6 @@ function renderSavedCourse(course) {
         `}
       </div>
     </article>
-  `;
-}
-
-function renderWordTable() {
-  if (!state.lesson.words.length) {
-    return `<div class="empty-state">目前沒有單字。先新增或匯入 CSV，再回到遊戲前台。</div>`;
-  }
-
-  return `
-    <div class="word-table-wrap">
-      <table class="word-table">
-        <thead>
-          <tr>
-            <th>英文單字</th>
-            <th>中文提示</th>
-            <th>分類</th>
-            <th>例句</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-          ${state.lesson.words.map((item, index) => `
-            <tr>
-              <td><input value="${escapeAttr(item.word)}" data-action="edit-word" data-index="${index}" data-field="word" /></td>
-              <td><input value="${escapeAttr(item.meaning)}" data-action="edit-word" data-index="${index}" data-field="meaning" /></td>
-              <td><input value="${escapeAttr(item.category)}" data-action="edit-word" data-index="${index}" data-field="category" /></td>
-              <td><input value="${escapeAttr(item.sentence)}" data-action="edit-word" data-index="${index}" data-field="sentence" /></td>
-              <td><button class="mini-button" data-action="delete-word" data-index="${index}">刪除</button></td>
-            </tr>
-          `).join("")}
-        </tbody>
-      </table>
-    </div>
   `;
 }
 
@@ -1744,12 +1761,12 @@ async function rollDice() {
 
   if (passedStart) {
     team.coins += 100;
-    addLog(`${team.name} 經過起點，獲得 $100。`);
+    addLog(`${team.name} passed START and earned $100.`);
   }
 
   if (nextPosition === 0) {
     team.coins += 100;
-    addLog(`${team.name} 停在起點，獲得 $100。`);
+    addLog(`${team.name} landed on START and earned $100.`);
     advanceTeam();
     state.game.currentTask = null;
     state.game.phase = "ready";
@@ -1761,7 +1778,7 @@ async function rollDice() {
   const tile = getTile(nextPosition);
   state.game.currentTask = createTask(tile, nextPosition);
   state.game.phase = "task";
-  addLog(`${team.name} 擲出 ${dice}，走到 ${tile.label} 格。`);
+  addLog(`${team.name} rolled ${dice} and moved to ${tile.label}.`);
   render();
 }
 
@@ -1818,465 +1835,146 @@ function createTask(tile, tileIndex) {
   }
 
   const taskType = resolveTaskType(tile.type, tileIndex);
-  const owner = getTileOwner(tileIndex);
-  const baseSupport = `${word.meaning || "沒有中文提示"} · ${word.category || "課堂單字"}`;
+  const baseSupport = `${word.zh || "沒有中文提示"} · 課堂單字`;
 
   if (tile.type === "chance") {
-    return createChanceTask(word, owner);
+    return createChanceTask(word);
   }
 
   if (taskType === "sentence") {
-    return createSentenceTask(word, owner, "造句任務");
+    return createSentenceTask(word, "Make a sentence");
   }
 
   if (taskType === "spell") {
     return {
       type: taskType,
-      kicker: "拼字任務",
+      kicker: "Spell the word",
       title: getSpellingTitle(word),
       prompt: getSpellingPrompt(word),
-      support: getSpellingSupport(word, owner),
-      answer: word.word,
+      support: getSpellingSupport(word),
+      answer: word.en,
     };
   }
 
   if (taskType === "ask") {
-    return createAskTask(word, owner);
+    return createAskTask(word);
   }
 
   if (taskType === "act") {
     return {
       type: taskType,
-      kicker: "動作表演",
-      title: word.word,
-      prompt: `做一個動作，並說出：${word.word}`,
+      kicker: "Performance",
+      title: word.en,
+      prompt: `做一個動作，並說出：${word.en}`,
       support: baseSupport,
     };
   }
 
   if (taskType === "choose") {
-    const options = buildMeaningOptions(word);
-    const answer = word.meaning || word.word;
-    return {
-      type: taskType,
-      kicker: "選意思",
-      title: word.word,
-      prompt: `選出中文意思：${options.join(" / ")}`,
-      support: "請學生選一個中文意思，老師再公布結果。",
-      answer,
-    };
+    return createChooseTask(word);
   }
 
   return {
     type: "say",
-    kicker: "唸單字",
-    title: word.word,
-    prompt: `大聲唸出：${word.word}`,
+    kicker: "Read the word",
+    title: word.en,
+    prompt: `大聲唸出：${word.en}`,
     support: baseSupport,
   };
 }
 
-function createAskTask(word, owner) {
+function createAskTask(word) {
   const askContent = buildAskContent(word);
-  const support = [
-    "同學用完整句回答，老師判斷是否通過。",
-    owner ? `地點主人：${owner.name}` : "",
-  ].filter(Boolean).join(" · ");
+  const support = "Answer in a complete sentence.";
 
   return {
     type: "ask",
-    kicker: "問答任務",
-    title: "問同學",
-    prompt: `問同學：${askContent.question}`,
+    kicker: "Answer a question",
+    title: "Question",
+    prompt: askContent.question,
     support,
     answerGuide: askContent.answerGuide,
   };
 }
 
-function buildAskContent(word, options = {}) {
-  const askMode = normalizeAskMode(state.lesson.askMode);
-
-  if (askMode === "student") {
-    return createStudentAskContent(word);
-  }
-
-  if (askMode === "template") {
-    const pattern = pickAskPattern(options);
-    const templateQuestion = createQuestionFromTemplate(pattern, word);
-    if (templateQuestion) {
-      return {
-        ...templateQuestion,
-        basis: `依據：課程問答句型「${pattern}」。`,
-      };
-    }
-  }
-
-  const sentenceQuestion = createQuestionFromStatement(word.sentence);
-  if (sentenceQuestion) {
-    return {
-      ...sentenceQuestion,
-      basis: `依據：例句「${formatSourceSentence(word.sentence)}」。`,
-    };
-  }
-
-  for (const pattern of getReferencePatterns()) {
-    const patternQuestion = createQuestionFromStatement(fillAskPattern(pattern, word));
-    if (patternQuestion) {
-      return {
-        ...patternQuestion,
-        basis: `依據：老師設定的參考句型「${pattern}」。`,
-      };
-    }
-  }
-
+function buildAskContent(word) {
   return {
-    question: `請用 "${word.word}" 問一個英文問題。`,
-    basis: "依據：老師設定的單字，不自動套用固定問答。",
-    answerGuide: "老師依學生回答判定。",
+    question: `What can you say about "${word.en}"?`,
+    answerGuide: "Open answer. The teacher decides whether it is correct.",
   };
 }
 
-function createStudentAskContent(word) {
-  return {
-    question: `請用 "${word.word}" 問同學一個英文問題。`,
-    basis: "依據：問答模式「學生造問句」。",
-    answerGuide: "老師依學生回答判定。",
-  };
-}
-
-function pickAskPattern(options = {}) {
-  const patterns = getAskPatterns();
-  if (!patterns.length) return "";
-  return options.preferFirstPattern ? patterns[0] : randomItem(patterns);
-}
-
-function createQuestionFromTemplate(pattern, word) {
-  const question = ensureQuestionMark(fillAskTemplate(pattern, word));
-  if (!question) return null;
-  return {
-    question,
-    answerGuide: createAnswerGuideFromQuestion(question),
-  };
-}
-
-function createQuestionFromStatement(source) {
-  const sentence = normalizeQuestionSource(source);
-  if (!sentence) return null;
-
-  let match = sentence.match(/^there\s+is\s+(.+)$/i);
-  if (match) {
-    return {
-      question: `Is there ${match[1]}?`,
-      answerGuide: "Yes, there is. / No, there isn't.",
-    };
-  }
-
-  match = sentence.match(/^there\s+are\s+(.+)$/i);
-  if (match) {
-    return {
-      question: `Are there ${match[1]}?`,
-      answerGuide: "Yes, there are. / No, there aren't.",
-    };
-  }
-
-  match = sentence.match(/^(this|that|it)\s+is\s+(.+)$/i);
-  if (match) {
-    const subject = match[1].toLowerCase();
-    return {
-      question: `Is ${subject} ${match[2]}?`,
-      answerGuide: "Yes, it is. / No, it isn't.",
-    };
-  }
-
-  match = sentence.match(/^(he|she)\s+is\s+(.+)$/i);
-  if (match) {
-    const subject = match[1].toLowerCase();
-    return {
-      question: `Is ${subject} ${match[2]}?`,
-      answerGuide: `Yes, ${subject} is. / No, ${subject} isn't.`,
-    };
-  }
-
-  match = sentence.match(/^i\s+am\s+(.+)$/i);
-  if (match) {
-    return {
-      question: `Are you ${match[1]}?`,
-      answerGuide: "Yes, I am. / No, I'm not.",
-    };
-  }
-
-  match = sentence.match(/^(you|we|they)\s+are\s+(.+)$/i);
-  if (match) {
-    const subject = getQuestionSubject(match[1]);
-    const answerSubject = getAnswerSubject(match[1]);
-    const answerGuide = answerSubject === "I"
-      ? "Yes, I am. / No, I'm not."
-      : `Yes, ${answerSubject} are. / No, ${answerSubject} aren't.`;
-    return {
-      question: `Are ${subject} ${match[2]}?`,
-      answerGuide,
-    };
-  }
-
-  match = sentence.match(/^(.+?)\s+can\s+(.+)$/i);
-  if (match) {
-    const subject = getQuestionSubject(match[1]);
-    const answerSubject = getAnswerSubject(match[1]);
-    return {
-      question: `Can ${subject} ${match[2]}?`,
-      answerGuide: `Yes, ${answerSubject} can. / No, ${answerSubject} can't.`,
-    };
-  }
-
-  match = sentence.match(/^(he|she|it)\s+has\s+(.+)$/i);
-  if (match) {
-    const subject = match[1].toLowerCase();
-    return {
-      question: `Does ${subject} have ${match[2]}?`,
-      answerGuide: `Yes, ${subject} does. / No, ${subject} doesn't.`,
-    };
-  }
-
-  match = sentence.match(/^(he|she|it)\s+([a-z]+(?:ies|es|s))\s*(.*)$/i);
-  if (match && !["is", "has", "does"].includes(match[2].toLowerCase())) {
-    const subject = match[1].toLowerCase();
-    const verb = toBaseVerb(match[2]);
-    const object = match[3].trim();
-    return {
-      question: `Does ${subject} ${verb}${object ? ` ${object}` : ""}?`,
-      answerGuide: `Yes, ${subject} does. / No, ${subject} doesn't.`,
-    };
-  }
-
-  match = sentence.match(/^(i|you|we|they)\s+([a-z]+)\s*(.*)$/i);
-  if (match) {
-    const subject = getQuestionSubject(match[1]);
-    const answerSubject = getAnswerSubject(match[1]);
-    const verb = match[2].toLowerCase();
-    const object = match[3].trim();
-    return {
-      question: `Do ${subject} ${verb}${object ? ` ${object}` : ""}?`,
-      answerGuide: `Yes, ${answerSubject} do. / No, ${answerSubject} don't.`,
-    };
-  }
-
-  return null;
-}
-
-function normalizeQuestionSource(source) {
-  return String(source || "")
-    .replace(/[“”"]/g, "")
-    .replace(/\s+/g, " ")
-    .trim()
-    .replace(/[.!?]+$/, "");
-}
-
-function getQuestionSubject(subject) {
-  const cleanSubject = normalizeQuestionSource(subject);
-  if (/^i$/i.test(cleanSubject)) return "you";
-  if (/^we$/i.test(cleanSubject)) return "you";
-  return cleanSubject.toLowerCase();
-}
-
-function getAnswerSubject(subject) {
-  const cleanSubject = normalizeQuestionSource(subject);
-  if (/^i$/i.test(cleanSubject)) return "I";
-  if (/^you$/i.test(cleanSubject)) return "I";
-  if (/^we$/i.test(cleanSubject)) return "we";
-  if (/^(he|she|we|they)$/i.test(cleanSubject)) return cleanSubject.toLowerCase();
-  return "it";
-}
-
-function formatSourceSentence(source) {
-  const sentence = String(source || "").trim();
-  return sentence || "未填例句";
-}
-
-function ensureQuestionMark(value) {
-  const question = String(value || "").trim().replace(/[.!?]+$/, "");
-  return question ? `${question}?` : "";
-}
-
-function createAnswerGuideFromQuestion(question) {
-  const cleanQuestion = normalizeQuestionSource(question);
-
-  if (/^do\s+you\b/i.test(cleanQuestion)) return "Yes, I do. / No, I don't.";
-  if (/^do\s+they\b/i.test(cleanQuestion)) return "Yes, they do. / No, they don't.";
-  if (/^do\s+we\b/i.test(cleanQuestion)) return "Yes, we do. / No, we don't.";
-
-  let match = cleanQuestion.match(/^does\s+(he|she|it)\b/i);
-  if (match) {
-    const subject = match[1].toLowerCase();
-    return `Yes, ${subject} does. / No, ${subject} doesn't.`;
-  }
-
-  if (/^can\s+you\b/i.test(cleanQuestion)) return "Yes, I can. / No, I can't.";
-  match = cleanQuestion.match(/^can\s+(.+?)\s+/i);
-  if (match) {
-    const subject = getAnswerSubject(match[1]);
-    return `Yes, ${subject} can. / No, ${subject} can't.`;
-  }
-
-  if (/^is\s+(this|that)\b/i.test(cleanQuestion)) return "Yes, it is. / No, it isn't.";
-  match = cleanQuestion.match(/^is\s+(he|she|it)\b/i);
-  if (match) {
-    const subject = match[1].toLowerCase();
-    return `Yes, ${subject} is. / No, ${subject} isn't.`;
-  }
-
-  if (/^are\s+you\b/i.test(cleanQuestion)) return "Yes, I am. / No, I'm not.";
-  if (/^are\s+they\b/i.test(cleanQuestion)) return "Yes, they are. / No, they aren't.";
-  if (/^are\s+we\b/i.test(cleanQuestion)) return "Yes, we are. / No, we aren't.";
-  if (/^(what|where|when|who|how|which|why)\b/i.test(cleanQuestion)) return "用單字或完整句回答。";
-
-  return "老師依學生回答判定。";
-}
-
-function toBaseVerb(verb) {
-  const text = String(verb || "").toLowerCase();
-  if (text.endsWith("ies")) return `${text.slice(0, -3)}y`;
-  if (text.endsWith("ches") || text.endsWith("shes") || text.endsWith("xes") || text.endsWith("ses") || text.endsWith("zes")) {
-    return text.slice(0, -2);
-  }
-  if (text.endsWith("oes")) return text.slice(0, -2);
-  if (text.endsWith("s")) return text.slice(0, -1);
-  return text;
-}
-
-function fillAskTemplate(pattern, word) {
-  const template = String(pattern || "").trim();
-  if (!template) return "";
-  if (!template.includes("___")) return template;
-  const normalizedTemplate = isModifierWord(word)
-    ? template.replace(/\b(?:a|an)\s+___/i, "___")
-    : template;
-  return normalizedTemplate.replaceAll("___", getWordForPattern(normalizedTemplate, word));
-}
-
-function fillAskPattern(pattern, word) {
-  const template = isModifierWord(word)
-    ? String(pattern || "").replace(/\b(?:a|an)\s+___/i, "___")
-    : pattern;
-  return fillPattern(template, getWordForPattern(template, word));
-}
-
-function getWordForPattern(pattern, word) {
-  const text = String(word.word || "").trim();
-  if (!text) return "";
-  return /\blike\s+___/i.test(pattern) ? getLikeObjectWord(word) : text;
-}
-
-function getLikeObjectWord(word) {
-  const text = String(word.word || "").trim();
-  if (!text || isModifierWord(word) || isUncountableWord(text)) return text;
-  return pluralizeEnglishWord(text);
-}
-
-function isModifierWord(word) {
-  return /colors?|colours?|shapes?/i.test(String(word.category || ""));
-}
-
-function isUncountableWord(word) {
-  return ["bread", "cheese", "chicken", "fish", "juice", "meat", "milk", "rice", "tea", "water"].includes(
-    word.toLowerCase(),
-  );
-}
-
-function pluralizeEnglishWord(word) {
-  if (/[^aeiou]y$/i.test(word)) return `${word.slice(0, -1)}ies`;
-  if (/(s|x|z|ch|sh)$/i.test(word)) return `${word}es`;
-  if (/fe$/i.test(word)) return `${word.slice(0, -2)}ves`;
-  if (/f$/i.test(word)) return `${word.slice(0, -1)}ves`;
-  return `${word}s`;
-}
-
-function createSentenceTask(word, owner, kicker = "造句任務", bonus = 0) {
-  const hasOwnSentence = Boolean(word.sentence);
-  const support = getSentenceSupport(word, owner, hasOwnSentence, bonus);
+function createSentenceTask(word, kicker = "Make a sentence", bonus = 0) {
+  const support = getSentenceSupport(word, bonus);
 
   return {
     type: "sentence",
     kicker,
-    title: word.word,
-    prompt: hasOwnSentence ? word.sentence : `用 "${word.word}" 造一個英文句子。`,
+    title: word.en,
+    prompt: `Make a sentence using ${word.en}.`,
     support,
     bonus,
   };
 }
 
-function getSentenceSupport(word, owner, hasOwnSentence, bonus = 0) {
+function getSentenceSupport(word, bonus = 0) {
   const hints = [];
 
-  if (hasOwnSentence) {
-    if (word.meaning || word.category) {
-      hints.push([word.meaning, word.category].filter(Boolean).join(" · "));
-    }
-  } else {
-    hints.push("沒有專屬例句，老師可選適合句型或讓學生自由造句。");
-    const patterns = getReferencePatterns();
-    if (patterns.length) {
-      hints.push(`參考句型：${patterns.join(" / ")}`);
-    }
-  }
+  if (word.zh) hints.push(word.zh);
 
   if (bonus) hints.push(`加分 +$${bonus}`);
-  if (owner) hints.push(`地點主人：${owner.name}`);
-  return hints.join(" · ") || "老師帶著學生完成造句。";
-}
-
-function getReferencePatterns() {
-  return state.lesson.patterns
-    .map((pattern) => String(pattern || "").trim())
-    .filter(Boolean)
-    .slice(0, 2);
-}
-
-function getAskPatterns() {
-  return normalizeTextList(state.lesson.askPatterns, defaultLesson.askPatterns);
+  return hints.join(" · ") || "老師帶著學生說出一個英文句子。";
 }
 
 function getSpellingTitle(word) {
-  return word.meaning || word.category || "聽提示拼字";
+  return word.zh || "Spell the word";
 }
 
 function getSpellingPrompt(word) {
-  const category = word.category ? `（${word.category}）` : "";
-  return `看提示${category}，拼出英文單字。`;
+  return `看中文提示，拼出英文單字。`;
 }
 
-function getSpellingSupport(word, owner) {
+function getSpellingSupport(word) {
   const hints = [];
-  if (word.category) hints.push(`分類：${word.category}`);
-  if (word.sentence) hints.push("老師可以念例句，但不要顯示答案。");
-  if (owner) hints.push(`地點主人：${owner.name}`);
+  if (word.zh) hints.push(`中文提示：${word.zh}`);
   return hints.join(" · ") || "老師念提示，學生拼出英文。";
 }
 
-function createChanceTask(word, owner) {
+function createChooseTask(word) {
+  const options = buildMeaningOptions(word);
+  return {
+    type: "choose",
+    kicker: "Choose the Answer",
+    title: word.en,
+    prompt: `選出中文意思：${options.join(" / ")}`,
+    support: "請學生選一個中文意思，老師再公布結果。",
+    answer: word.zh,
+  };
+}
+
+function createChanceTask(word) {
   const pool = [
-    createSentenceTask(word, owner, "幸運造句", 30),
+    createSentenceTask(word, "Lucky: Make a sentence", 30),
     {
       type: "ask",
-      kicker: "隊友挑戰",
-      title: word.word,
-      prompt: `問隊友：${word.word} 的中文是什麼？`,
-      support: "隊友答對也多拿 $30。",
+      kicker: "Team Challenge",
+      title: word.en,
+      prompt: `Ask a teammate: What is the Chinese meaning of ${word.en}?`,
+      support: "If the teammate answers correctly, they also get $30.",
       bonus: 30,
     },
     {
       type: "spell",
-      kicker: "限時拼字",
+      kicker: "Timed Spell the word",
       title: getSpellingTitle(word),
       prompt: "聽老師提示，5 秒內拼出英文。",
-      answer: word.word,
+      answer: word.en,
       support: "老師可以放寬秒數，讓低年級也能玩。",
     },
   ];
   const task = randomItem(pool);
   if (task.type === "spell") {
-    task.support = getSpellingSupport(word, owner);
-  } else {
-    task.support = owner ? `${task.support} 地點主人：${owner.name}` : task.support;
+    task.support = getSpellingSupport(word);
   }
   return task;
 }
@@ -2304,8 +2002,8 @@ async function flipMemoryCard(target) {
     const team = getMemoryTeam();
     state.memory.scores[team.id] = (state.memory.scores[team.id] || 0) + 1;
     const completed = state.memory.matchedIds.length === state.memory.cards.length;
-    addMemoryLog(`${team.name} 配對成功：${first.kind === "英文" ? first.text : second.text}${completed ? "" : "，換下一隊。"}`);
-    triggerMemoryFeedback("success", completed ? `${team.name} 完成最後一組！` : `${team.name} 配對成功，換下一隊`, team.id);
+    addMemoryLog(`${team.name} matched: ${first.kind === "英文" ? first.text : second.text}${completed ? "" : ". Next team."}`);
+    triggerMemoryFeedback("success", completed ? `${team.name} completed the last pair!` : `${team.name} matched. Next team.`, team.id);
     state.memory.flippedIds = [];
 
     if (completed) {
@@ -2322,8 +2020,8 @@ async function flipMemoryCard(target) {
 
   state.memory.locked = true;
   const missedTeam = getMemoryTeam();
-  addMemoryLog(`${missedTeam.name} 沒有配成，換下一隊。`);
-  triggerMemoryFeedback("miss", `${missedTeam.name} 沒配成，換下一隊`, missedTeam.id);
+  addMemoryLog(`${missedTeam.name} missed. Next team.`);
+  triggerMemoryFeedback("miss", `${missedTeam.name} missed. Next team.`, missedTeam.id);
   render();
   await wait(850);
   state.memory.flippedIds = [];
@@ -2336,32 +2034,19 @@ function markCorrect() {
   if (state.game.phase !== "task" || isBusy()) return;
   const team = getCurrentTeam();
   const task = state.game.currentTask;
-  const tileIndex = state.game.currentTile;
-  const owner = getTileOwner(tileIndex);
   const reward = 60 + (task.bonus || 0);
 
   team.coins += reward;
-
-  if (owner && owner.id !== team.id) {
-    const rent = Math.min(20, team.coins);
-    team.coins -= rent;
-    owner.coins += rent;
-    addLog(`${team.name} 答對，獲得 $${reward}，並付 ${owner.name} $${rent}。`);
-  } else if (!owner && state.game.currentTile !== 0) {
-    team.ownedTiles.push(tileIndex);
-    addLog(`${team.name} 答對，獲得 $${reward}，並拿下第 ${tileIndex} 格。`);
-  } else {
-    addLog(`${team.name} 答對，獲得 $${reward}。`);
-  }
+  addLog(`${team.name} answered correctly and earned $${reward}.`);
 
   triggerCelebration("答對了！");
-  completeTurn("答對，加分完成。");
+  completeTurn("Correct. Points added.");
 }
 
 function skipTask() {
   if (state.game.phase !== "task" || isBusy()) return;
-  addLog(`${getCurrentTeam().name} 跳過任務。`);
-  completeTurn("已跳過，換下一隊。");
+  addLog(`${getCurrentTeam().name} skipped the task.`);
+  completeTurn("Skipped. Next team.");
 }
 
 function completeTurn(message) {
@@ -2392,14 +2077,6 @@ function getMemoryColumns() {
   if (cardCount <= 8) return 4;
   if (cardCount <= 12) return 4;
   return 5;
-}
-
-function getTileOwner(tileIndex) {
-  return state.game.teams.find((team) => team.ownedTiles.includes(tileIndex));
-}
-
-function totalOwnedTiles() {
-  return state.game.teams.reduce((total, team) => total + team.ownedTiles.length, 0);
 }
 
 function isBusy() {
@@ -2449,7 +2126,19 @@ function pickWord(tileIndex) {
 }
 
 function getLessonWords() {
-  return Array.isArray(state.lesson?.words) ? state.lesson.words : [];
+  return Array.isArray(state.lesson?.words)
+    ? state.lesson.words.map(normalizeWord).filter(isCompleteWord)
+    : [];
+}
+
+function isCompleteWord(word) {
+  return Boolean(String(word?.en || "").trim() && String(word?.zh || "").trim());
+}
+
+function getIncompleteWords(words = state.lesson?.words || []) {
+  return Array.isArray(words)
+    ? words.map(normalizeWord).filter((word) => (word.en || word.zh || word.phonetic || word.image) && !isCompleteWord(word))
+    : [];
 }
 
 function getDisplayTileType(tileType, tileIndex) {
@@ -2510,18 +2199,13 @@ function resetWordDrawPile() {
   state.game.lastWordIndex = null;
 }
 
-function fillPattern(pattern, word) {
-  const template = pattern || "I see a ___ .";
-  return template.includes("___") ? template.replaceAll("___", word) : `${template} ${word}`;
-}
-
 function buildMeaningOptions(word) {
   const meanings = state.lesson.words
-    .map((item) => item.meaning)
+    .map((item) => normalizeWord(item).zh)
     .filter(Boolean)
-    .filter((meaning) => meaning !== word.meaning);
+    .filter((meaning) => meaning !== word.zh);
   const shuffled = shuffle(meanings).slice(0, 2);
-  return shuffle([word.meaning || word.word, ...shuffled]);
+  return shuffle([word.zh, ...shuffled]);
 }
 
 function randomItem(items) {
@@ -2565,8 +2249,109 @@ function showToast(message) {
   }, 2200);
 }
 
+function cancelCourseAutosave() {
+  clearTimeout(courseAutosaveTimer);
+  courseAutosaveTimer = null;
+  courseAutosaveQueued = false;
+}
+
+function canQueueCourseAutosave() {
+  return state.view === "teacher"
+    && isTeacherUnlocked()
+    && isEditingExistingCourse()
+    && Boolean(getTeacherWriteToken())
+    && Boolean(getLessonWords().length)
+    && !getIncompleteWords().length;
+}
+
+function canAutosaveCourse() {
+  return canQueueCourseAutosave()
+    && !cloudSave.saving
+    && !cloudSave.verifying;
+}
+
+function scheduleCourseAutosave() {
+  clearTimeout(courseAutosaveTimer);
+  courseAutosaveTimer = null;
+  if (!canQueueCourseAutosave()) {
+    courseAutosaveQueued = false;
+    return;
+  }
+
+  if (cloudSave.saving || cloudSave.verifying) {
+    courseAutosaveQueued = true;
+    cloudSave.tokenMessage = "目前同步完成後會再自動同步一次。";
+    updateTeacherTokenFeedback();
+    return;
+  }
+
+  courseAutosaveQueued = false;
+
+  cloudSave.tokenStatus = cloudSave.tokenStatus === "saved" ? "saved" : "verified";
+  cloudSave.tokenMessage = "已排程自動同步 Supabase。";
+  updateTeacherTokenFeedback();
+
+  courseAutosaveTimer = setTimeout(() => {
+    autosaveCurrentCourse();
+  }, COURSE_AUTOSAVE_DELAY);
+}
+
+async function autosaveCurrentCourse() {
+  courseAutosaveTimer = null;
+  if (!canAutosaveCourse()) return;
+
+  const prepared = prepareCourseForSave();
+  if (!prepared.ok || prepared.mode !== "existing") {
+    return;
+  }
+
+  const token = getTeacherWriteToken();
+  const lesson = normalizeLesson(prepared.lesson);
+  state.lesson = lesson;
+  cloudSave.saving = true;
+  cloudSave.tokenStatus = cloudSave.tokenStatus === "saved" ? "saved" : "verified";
+  cloudSave.tokenMessage = "正在自動同步 Supabase。";
+  updateTeacherTokenFeedback();
+
+  try {
+    const result = await saveCourseToCloud(lesson, token, prepared);
+    upsertCloudCourseAfterSave(result, lesson);
+    cloudSave.tokenStatus = "saved";
+    cloudSave.tokenMessage = `已自動同步：${new Intl.DateTimeFormat("zh-TW", {
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    }).format(new Date())}`;
+    saveState();
+  } catch (error) {
+    console.warn("Unable to autosave course to Supabase", error);
+    if (error.status === 401) {
+      clearTeacherWriteToken();
+      cloudSave.tokenStatus = "invalid";
+      cloudSave.tokenMessage = "寫入密碼錯誤，請重新登入後台。";
+      showToast("寫入密碼錯誤，請重新登入後台");
+      render();
+      return;
+    }
+
+    cloudSave.tokenStatus = "error";
+    cloudSave.tokenMessage = error.message || "自動同步失敗，請稍後手動寫入 Supabase。";
+    showToast(error.message || "自動同步失敗，請稍後手動寫入 Supabase");
+    render();
+  } finally {
+    cloudSave.saving = false;
+    if (courseAutosaveQueued) {
+      courseAutosaveQueued = false;
+      scheduleCourseAutosave();
+    } else {
+      updateTeacherTokenFeedback();
+    }
+  }
+}
+
 async function saveCurrentCourse() {
   if (cloudSave.saving) return;
+  cancelCourseAutosave();
 
   const prepared = prepareCourseForSave();
   if (!prepared.ok) {
@@ -2575,16 +2360,17 @@ async function saveCurrentCourse() {
     return;
   }
 
-  const lesson = saveCurrentCourseLocally(prepared);
   const token = getTeacherWriteToken();
   if (!token) {
     cloudSave.tokenStatus = "empty";
     cloudSave.tokenMessage = "";
-    showToast(`已儲存本機：${lesson.name}`);
+    showToast("請先輸入寫入密碼，課程只會儲存到 Supabase");
     render();
     return;
   }
 
+  const lesson = normalizeLesson(prepared.lesson);
+  state.lesson = lesson;
   cloudSave.saving = true;
   showToast("正在寫入 Supabase");
   render();
@@ -2595,7 +2381,7 @@ async function saveCurrentCourse() {
     }
 
     const result = await saveCourseToCloud(lesson, token, prepared);
-    updateSavedCourseAfterCloudSave(result, lesson);
+    upsertCloudCourseAfterSave(result, lesson);
     cloudSave.tokenStatus = "saved";
     cloudSave.tokenMessage = `已成功寫入：${result.name || lesson.name}`;
     showToast(`已寫入 Supabase：${result.name || lesson.name}`);
@@ -2608,8 +2394,8 @@ async function saveCurrentCourse() {
       showToast("寫入密碼錯誤，已清除本次密碼");
     } else {
       cloudSave.tokenStatus = "error";
-      cloudSave.tokenMessage = error.message || "Supabase 寫入失敗，已保留本機課程。";
-      showToast(error.message || "Supabase 寫入失敗，已保留本機課程");
+      cloudSave.tokenMessage = error.message || "同步到 Supabase 失敗，課程未儲存。";
+      showToast(error.message || "同步到 Supabase 失敗，課程未儲存");
     }
   } finally {
     cloudSave.saving = false;
@@ -2621,17 +2407,44 @@ function prepareCourseForSave() {
   const lesson = normalizeLesson(state.lesson);
   const courses = loadCourseLibrary();
   const selectedCourse = getSelectedCourse();
+  const incompleteWords = getIncompleteWords(lesson.words);
+  const completeWords = lesson.words.filter(isCompleteWord);
+
+  if (incompleteWords.length) {
+    return {
+      ok: false,
+      message: `${incompleteWords.length} 筆單字缺少 en 或 zh，請補齊後再同步。`,
+    };
+  }
+
+  if (!completeWords.length) {
+    return {
+      ok: false,
+      message: "請至少新增一筆 en + zh 完整的單字。",
+    };
+  }
 
   if (isEditingExistingCourse()) {
-    const lockedSlug = createCourseSlug(state.courseEditor.lockedSlug || selectedCourse.lesson.slug || lesson.slug);
-    lesson.slug = lockedSlug;
+    lesson.slug = createCourseSlug(lesson.slug || lesson.name);
+    const collision = courses.find((course) => (
+      course.id !== selectedCourse?.id
+      && createCourseSlug(course.lesson?.slug || course.lesson?.name) === lesson.slug
+    ));
+
+    if (collision) {
+      return {
+        ok: false,
+        message: `課程網址代碼已被「${collision.lesson.name}」使用，請換一個代碼。`,
+      };
+    }
+
     state.lesson = lesson;
     return {
       ok: true,
       mode: "existing",
       lesson,
       selectedCourse,
-      lockedSlug,
+      lockedSlug: lesson.slug,
     };
   }
 
@@ -2657,53 +2470,20 @@ function prepareCourseForSave() {
   };
 }
 
-function saveCurrentCourseLocally(prepared = {}) {
-  const now = Date.now();
-  const lesson = normalizeLesson(prepared.lesson || state.lesson);
-  lesson.slug = createCourseSlug(lesson.slug || lesson.name);
-  const courses = loadCourseLibrary();
-  const lessonKey = lesson.slug;
-  const existingIndex = prepared.mode === "existing" && prepared.selectedCourse
-    ? courses.findIndex((course) => course.id === prepared.selectedCourse.id)
-    : courses.findIndex((course) => createCourseSlug(course.lesson?.slug || course.lesson?.name) === lessonKey);
-  let savedCourse = null;
-
-  if (existingIndex >= 0) {
-    savedCourse = {
-      ...courses[existingIndex],
-      lesson,
-      updatedAt: now,
-    };
-    courses[existingIndex] = savedCourse;
-  } else {
-    savedCourse = {
-      id: createCourseId(),
-      lesson,
-      createdAt: now,
-      updatedAt: now,
-    };
-    courses.unshift(savedCourse);
-  }
-
-  saveCourseLibrary(courses.sort((a, b) => b.updatedAt - a.updatedAt));
-  state.lesson = lesson;
-  setCourseEditorCourse(savedCourse);
-  return lesson;
-}
-
 async function saveCourseToCloud(lesson, token, saveContext = {}) {
-  if (!lesson.words.length) {
-    throw new Error("請至少新增一個單字再寫入 Supabase");
+  const words = lesson.words.filter(isCompleteWord);
+  if (!words.length) {
+    throw new Error("請至少新增一筆 en + zh 完整的單字再寫入 Supabase");
   }
 
   const course = await saveSupabaseCourse(lesson, token, saveContext);
-  await replaceSupabaseWords(course.id, lesson.words, token);
+  await replaceSupabaseWords(course.id, words, token);
 
   return {
     id: course.id,
     slug: course.slug || lesson.slug,
     name: course.name || lesson.name,
-    wordCount: lesson.words.length,
+    wordCount: words.length,
   };
 }
 
@@ -2715,27 +2495,37 @@ async function saveSupabaseCourse(lesson, token, saveContext = {}) {
   return insertSupabaseCourse(lesson, token);
 }
 
-function updateSavedCourseAfterCloudSave(result, lesson) {
+function upsertCloudCourseAfterSave(result, lesson) {
   if (!result?.id) return;
 
   const courses = loadCourseLibrary();
   const lessonSlug = createCourseSlug(result.slug || lesson.slug);
   const index = courses.findIndex((course) => (
-    createCourseSlug(course.lesson?.slug || course.lesson?.name) === lessonSlug
+    course.id === result.id
+    || createCourseSlug(course.lesson?.slug || course.lesson?.name) === lessonSlug
   ));
-
-  if (index < 0) return;
-
-  const savedCourse = {
-    ...courses[index],
+  const now = Date.now();
+  const savedCourse = normalizeSavedCourse({
+    ...(index >= 0 ? courses[index] : {}),
     id: result.id,
     lesson: {
-      ...courses[index].lesson,
+      ...(index >= 0 ? courses[index].lesson : lesson),
       slug: result.slug || lesson.slug,
       name: result.name || lesson.name,
+      tags: lesson.tags || [],
+      enabledTasks: lesson.enabledTasks || [],
+      words: lesson.words || [],
     },
-  };
-  courses[index] = savedCourse;
+    createdAt: index >= 0 ? courses[index].createdAt : now,
+    updatedAt: now,
+  });
+
+  if (index >= 0) {
+    courses[index] = savedCourse;
+  } else {
+    courses.unshift(savedCourse);
+  }
+
   saveCourseLibrary(courses.sort((a, b) => b.updatedAt - a.updatedAt));
   setCourseEditorCourse(savedCourse);
 }
@@ -2781,9 +2571,6 @@ function getSupabaseCoursePayload(lesson) {
     slug: lesson.slug,
     name: lesson.name,
     tags: lesson.tags || [],
-    patterns: lesson.patterns || [],
-    ask_patterns: lesson.askPatterns || [],
-    ask_mode: lesson.askMode || "auto",
     enabled_tasks: lesson.enabledTasks || [],
     is_published: true,
   };
@@ -2812,22 +2599,58 @@ async function replaceSupabaseWords(courseId, words, token) {
 
   if (!words.length) return;
 
-  const response = await fetchSupabaseRest("words", token, {
+  const insertWords = (includeLegacyColumns = false) => fetchSupabaseRest("words", token, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       "Prefer": "return=minimal",
     },
-    body: JSON.stringify(words.map((item, index) => ({
+    body: JSON.stringify(getSupabaseWordPayload(courseId, words, includeLegacyColumns)),
+  });
+
+  try {
+    const response = await insertWords(supabaseLegacyWordPayloadRequired);
+    await parseSupabaseResponse(response);
+  } catch (error) {
+    if (!supabaseLegacyWordPayloadRequired && isLegacyWordConstraintError(error)) {
+      supabaseLegacyWordPayloadRequired = true;
+      const retryResponse = await insertWords(true);
+      await parseSupabaseResponse(retryResponse);
+      return;
+    }
+    throw error;
+  }
+}
+
+function getSupabaseWordPayload(courseId, words, includeLegacyColumns = false) {
+  return words.map((item, index) => {
+    const payload = {
       course_id: courseId,
       position: index,
-      word: item.word,
-      meaning: item.meaning || "",
-      category: item.category || "",
-      sentence: item.sentence || "",
-    }))),
+      en: item.en,
+      zh: item.zh,
+      sentence: "",
+      phonetic: item.phonetic || "",
+      image: item.image || "",
+    };
+
+    if (includeLegacyColumns) {
+      payload.word = item.en;
+      payload.meaning = item.zh;
+      payload.category = "";
+    }
+
+    return payload;
   });
-  await parseSupabaseResponse(response);
+}
+
+function isLegacyWordConstraintError(error) {
+  const message = String(error?.message || "").toLowerCase();
+  return (
+    message.includes('null value in column "word"')
+    || message.includes('null value in column "meaning"')
+    || message.includes('null value in column "category"')
+  ) && message.includes('relation "words"');
 }
 
 async function fetchSupabaseRest(path, token, options = {}) {
@@ -2854,7 +2677,7 @@ async function parseSupabaseResponse(response) {
   const payload = text ? JSON.parse(text) : null;
 
   if (!response.ok) {
-    const message = payload?.message || payload?.error || `Supabase 寫入失敗 (${response.status})`;
+    const message = payload?.message || payload?.error || `Supabase 同步失敗 (${response.status})`;
     const error = new Error(message);
     error.status = response.status;
     throw error;
@@ -2865,10 +2688,11 @@ async function parseSupabaseResponse(response) {
 
 function updateTeacherTokenInput(target) {
   const normalized = String(target.value || "").trim();
+  teacherAccessUnlocked = false;
   if (normalized) {
     storeTeacherWriteToken(normalized);
     cloudSave.tokenStatus = "pending";
-    cloudSave.tokenMessage = "尚未驗證；按「驗證」確認密碼。";
+    cloudSave.tokenMessage = "請按「進入後台」完成登入。";
   } else {
     clearTeacherWriteToken();
     cloudSave.tokenStatus = "empty";
@@ -2889,8 +2713,13 @@ function updateTeacherTokenFeedback() {
   const disabled = cloudSave.saving || cloudSave.verifying;
   const verifyButton = document.querySelector('[data-action="verify-teacher-token"]');
   const clearButton = document.querySelector('[data-action="clear-teacher-token"]');
+  const saveButton = document.querySelector('[data-action="save-course"]');
   if (verifyButton) verifyButton.disabled = disabled || !hasToken;
   if (clearButton) clearButton.disabled = disabled || !hasToken;
+  if (saveButton) {
+    saveButton.disabled = disabled;
+    saveButton.textContent = cloudSave.saving ? "同步中" : getCloudSaveButtonLabel();
+  }
 }
 
 async function verifyTeacherWriteToken() {
@@ -2917,6 +2746,7 @@ async function verifyTeacherWriteToken() {
       throw createTeacherTokenError();
     }
 
+    teacherAccessUnlocked = true;
     cloudSave.tokenStatus = "verified";
     cloudSave.tokenMessage = "密碼正確，可以寫入 Supabase。";
     showToast("寫入密碼已驗證");
@@ -2925,6 +2755,7 @@ async function verifyTeacherWriteToken() {
     console.warn("Unable to verify teacher write token", error);
     if (error.status === 401) {
       clearTeacherWriteToken();
+      teacherAccessUnlocked = false;
       cloudSave.tokenStatus = "invalid";
       cloudSave.tokenMessage = "寫入密碼錯誤，請重新輸入。";
       showToast("寫入密碼錯誤");
@@ -2980,9 +2811,11 @@ function clearTeacherWriteToken() {
   } catch (error) {
     console.warn("Unable to clear teacher write token", error);
   }
+  teacherAccessUnlocked = false;
 }
 
 function clearTeacherTokenInput() {
+  cancelCourseAutosave();
   clearTeacherWriteToken();
   cloudSave.tokenStatus = "empty";
   cloudSave.tokenMessage = "";
@@ -2994,12 +2827,8 @@ function loadSavedCourse(target) {
   loadCourseById(target.dataset.courseId);
 }
 
-function selectCourseFromPicker(target) {
-  if (!target.value) return;
-  loadCourseById(target.value);
-}
-
 function loadCourseById(courseId) {
+  cancelCourseAutosave();
   const course = loadCourseLibrary().find((item) => item.id === courseId);
   if (!course) {
     showToast("找不到這份課程");
@@ -3015,6 +2844,7 @@ function loadCourseById(courseId) {
 }
 
 function startNewCourse() {
+  cancelCourseAutosave();
   setActiveLesson(createBlankLesson());
   state.courseEditor = freshCourseEditorState("new");
   state.view = "teacher";
@@ -3024,6 +2854,7 @@ function startNewCourse() {
 }
 
 function duplicateCurrentCourse() {
+  cancelCourseAutosave();
   const lesson = normalizeLesson(state.lesson);
   const baseSlug = createCourseSlug(`${lesson.slug || lesson.name}-copy`);
   lesson.name = `${lesson.name} 副本`;
@@ -3032,7 +2863,7 @@ function duplicateCurrentCourse() {
   state.courseEditor = freshCourseEditorState("new");
   state.view = "teacher";
   state.chromeCollapsed = false;
-  showToast("已另存為新課程草稿");
+  showToast("已複製成新課程草稿");
   render();
 }
 
@@ -3048,10 +2879,10 @@ async function copyCourseLinkBySlug(slug) {
   const url = getCourseGamePageUrl(slug);
   try {
     await navigator.clipboard.writeText(url);
-    showToast("已複製前台連結");
+    showToast("已複製遊戲連結");
   } catch (error) {
     console.warn("Unable to copy course link", error);
-    showToast("前台連結已產生，可從網址列複製");
+    showToast("遊戲連結已產生，可從網址列複製");
   }
   render();
 }
@@ -3069,6 +2900,7 @@ function cancelDeleteSavedCourse() {
 }
 
 async function deleteSavedCourse(target) {
+  cancelCourseAutosave();
   const courseId = target.dataset.courseId;
   if (!courseId || courseDelete.deletingCourseId) return;
 
@@ -3086,35 +2918,32 @@ async function deleteSavedCourse(target) {
     return;
   }
 
-  const cloudCourse = isUuid(course.id);
   const token = getTeacherWriteToken();
-  if (cloudCourse && !token) {
+  if (!token) {
     cloudSave.tokenStatus = "empty";
     cloudSave.tokenMessage = "";
-    showToast("請先輸入並驗證寫入密碼");
+    showToast("請先登入老師後台");
     render();
     return;
   }
 
   courseDelete.deletingCourseId = courseId;
-  showToast(cloudCourse ? "正在刪除雲端課程" : "正在刪除本機課程");
+  showToast("正在刪除雲端課程");
   render();
 
   try {
-    if (cloudCourse) {
-      if (cloudSave.tokenStatus !== "verified" && !(await verifyTeacherWriteTokenValue(token))) {
-        throw createTeacherTokenError();
-      }
-      await deleteCourseFromCloud(course.id, token);
+    if (cloudSave.tokenStatus !== "verified" && !(await verifyTeacherWriteTokenValue(token))) {
+      throw createTeacherTokenError();
     }
+    await deleteCourseFromCloud(course.id, token);
 
-    removeCourseFromLocalLibrary(courseId);
+    removeCourseFromCloudLibrary(courseId);
     if (state.courseEditor?.selectedCourseId === courseId) {
       setActiveLesson(createBlankLesson());
       state.courseEditor = freshCourseEditorState("new");
       state.view = "teacher";
     }
-    showToast(cloudCourse ? `已刪除雲端課程：${course.lesson.name}` : `已刪除本機課程：${course.lesson.name}`);
+    showToast(`已刪除雲端課程：${course.lesson.name}`);
   } catch (error) {
     console.warn("Unable to delete course", error);
     if (error.status === 401) {
@@ -3142,7 +2971,7 @@ async function deleteCourseFromCloud(courseId, token) {
   await parseSupabaseResponse(response);
 }
 
-function removeCourseFromLocalLibrary(courseId) {
+function removeCourseFromCloudLibrary(courseId) {
   const courses = loadCourseLibrary();
   saveCourseLibrary(courses.filter((item) => item.id !== courseId));
 }
@@ -3287,6 +3116,7 @@ function resetMemoryGame() {
 }
 
 function loadDemo() {
+  cancelCourseAutosave();
   const lesson = structuredClone(defaultLesson);
   lesson.slug = createUniqueCourseSlug(`${lesson.slug}-demo`);
   setActiveLesson(lesson);
@@ -3299,12 +3129,8 @@ function loadDemo() {
 function updateLessonField(target) {
   const field = target.dataset.field;
   if (!field) return;
-  if (field === "slug" && isEditingExistingCourse()) {
-    target.value = state.courseEditor.lockedSlug || state.lesson.slug;
-    showToast("既有課程的網址代碼已鎖定");
-    return;
-  }
   state.lesson[field] = field === "slug" ? createCourseSlug(target.value) : target.value;
+  scheduleCourseAutosave();
   saveState();
 }
 
@@ -3313,6 +3139,7 @@ function updateTags(target) {
     .split(",")
     .map((item) => item.trim())
     .filter(Boolean);
+  scheduleCourseAutosave();
   saveState();
 }
 
@@ -3323,30 +3150,6 @@ function updateMemoryPairCount(target) {
   state.memory.flippedIds = [];
   state.memory.matchedIds = [];
   state.memory.started = false;
-  saveState();
-}
-
-function updatePatterns(target) {
-  state.lesson.patterns = target.value
-    .split(/\r?\n/)
-    .map((item) => item.trim())
-    .filter(Boolean);
-  if (!state.lesson.patterns.length) {
-    state.lesson.patterns = ["I see a ___ ."];
-  }
-  saveState();
-}
-
-function updateAskMode(target) {
-  state.lesson.askMode = normalizeAskMode(target.value);
-  if (!getAskPatterns().length) {
-    state.lesson.askPatterns = [...defaultLesson.askPatterns];
-  }
-  render();
-}
-
-function updateAskPatterns(target) {
-  state.lesson.askPatterns = normalizeTextList(target.value, defaultLesson.askPatterns);
   saveState();
 }
 
@@ -3368,14 +3171,12 @@ function toggleTask(target) {
 function addWord(form) {
   const formData = new FormData(form);
   const word = normalizeWord({
-    word: formData.get("word"),
-    meaning: formData.get("meaning"),
-    category: formData.get("category"),
-    sentence: formData.get("sentence"),
+    en: formData.get("en"),
+    zh: formData.get("zh"),
   });
 
-  if (!word.word) {
-    showToast("請先輸入英文單字");
+  if (!word.en || !word.zh) {
+    showToast("請先輸入 en 和 zh");
     render();
     return;
   }
@@ -3386,7 +3187,8 @@ function addWord(form) {
     state.memory = freshMemoryState({ teams: state.game.teams, pairCount: state.memory?.pairCount || 6 });
   }
   form.reset();
-  showToast(`已新增 ${word.word}`);
+  showToast(`已新增 ${word.en}`);
+  scheduleCourseAutosave();
   render();
 }
 
@@ -3395,7 +3197,25 @@ function updateWord(target) {
   const field = target.dataset.field;
   if (!Number.isInteger(index) || !field || !state.lesson.words[index]) return;
   state.lesson.words[index][field] = target.value;
+  if (field === "en" || field === "zh") {
+    resetWordDrawPile();
+    if (!state.memory.started) {
+      state.memory = freshMemoryState({ teams: state.game.teams, pairCount: state.memory?.pairCount || 6 });
+    }
+  }
+  scheduleCourseAutosave();
   saveState();
+}
+
+function toggleWordExtra(target) {
+  const index = Number(target.dataset.index);
+  if (!Number.isInteger(index)) return;
+  if (teacherUi.expandedWordIndexes.has(index)) {
+    teacherUi.expandedWordIndexes.delete(index);
+  } else {
+    teacherUi.expandedWordIndexes.add(index);
+  }
+  render();
 }
 
 function updateTeam(target) {
@@ -3412,13 +3232,12 @@ function addTeam() {
   const color = teamColors[index % teamColors.length];
   state.game.teams.push({
     id: `team-${Date.now()}`,
-    name: `第 ${index + 1} 隊`,
+    name: getDefaultTeamName(index),
     color,
     position: 0,
     coins: 300,
-    ownedTiles: [],
   });
-  showToast("已新增隊伍");
+  showToast("Team added");
   render();
 }
 
@@ -3445,8 +3264,8 @@ function deleteTeam(target) {
   state.game.currentTask = null;
   state.game.currentTile = getCurrentTeam().position;
 
-  addLog(`${removed.name} 已從遊戲移除。`);
-  showToast("已刪除隊伍");
+  addLog(`${removed.name} was removed from the game.`);
+  showToast("Team deleted");
   render();
 }
 
@@ -3454,15 +3273,15 @@ function deleteWord(target) {
   const index = Number(target.dataset.index);
   if (!Number.isInteger(index)) return;
   const removed = state.lesson.words.splice(index, 1)[0];
+  teacherUi.expandedWordIndexes.clear();
   resetWordDrawPile();
-  state.game.teams.forEach((team) => {
-    team.ownedTiles = team.ownedTiles.filter((tileIndex) => tileIndex < tilePath.length);
-  });
-  showToast(removed ? `已刪除 ${removed.word}` : "已刪除");
+  showToast(removed ? `已刪除 ${normalizeWord(removed).en || "單字"}` : "已刪除");
+  scheduleCourseAutosave();
   render();
 }
 
 function clearWords() {
+  cancelCourseAutosave();
   state.lesson.words = [];
   state.game = freshGameState({
     teams: state.game.teams,
@@ -3487,34 +3306,43 @@ function importCsv() {
     .map((row) => row.map((cell) => cell.trim()))
     .filter((row) => row.some(Boolean));
 
-  const hasHeader = normalized[0] && normalized[0].some((cell) => /word|meaning|category|sentence/i.test(cell));
+  const hasHeader = normalized[0] && normalized[0].some((cell) => /word|meaning|英文|中文|en|zh/i.test(cell));
   const dataRows = hasHeader ? normalized.slice(1) : normalized;
+  const hasExtraColumns = dataRows.some((row) => row.length > 2);
   const words = dataRows
-    .map(([word, meaning, category, sentence]) => normalizeWord({ word, meaning, category, sentence }))
-    .filter((item) => item.word);
+    .map(([en, zh]) => normalizeWord({ en, zh }))
+    .filter((item) => item.en && item.zh);
 
   if (!words.length) {
-    showToast("CSV 需要至少包含 word 欄位");
+    showToast("CSV 需要包含 en 和 zh 兩個欄位");
     render();
     return;
+  }
+
+  if (hasExtraColumns) {
+    showToast("CSV 格式已更新，只取前兩欄（英文、中文），分類與例句已略過");
   }
 
   state.lesson.words = words;
   state.game = freshGameState({
     teams: state.game.teams,
-    wordCount: words.length,
+    wordCount: getLessonWords().length,
     enabledTasks: state.game.enabledTasks,
   });
   state.memory = freshMemoryState({ teams: state.game.teams });
   textarea.value = "";
   showToast(`已匯入 ${words.length} 個單字`);
+  scheduleCourseAutosave();
   render();
 }
 
 function exportCsv() {
   const rows = [
-    ["word", "meaning", "category", "sentence"],
-    ...state.lesson.words.map((item) => [item.word, item.meaning, item.category, item.sentence]),
+    ["英文單字", "中文提示"],
+    ...state.lesson.words.map((item) => {
+      const word = normalizeWord(item);
+      return [word.en, word.zh];
+    }),
   ];
   const csv = rows.map((row) => row.map(quoteCsv).join(",")).join("\n");
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
@@ -3531,11 +3359,14 @@ function exportCsv() {
 }
 
 function normalizeWord(item) {
+  const en = String(item.en ?? item.word ?? "").trim();
+  const zh = String(item.zh ?? item.meaning ?? "").trim();
   return {
-    word: String(item.word || "").trim(),
-    meaning: String(item.meaning || "").trim(),
-    category: String(item.category || "").trim(),
-    sentence: String(item.sentence || "").trim(),
+    en,
+    zh,
+    sentence: "",
+    phonetic: String(item.phonetic || "").trim(),
+    image: String(item.image || "").trim(),
   };
 }
 
@@ -3644,10 +3475,7 @@ document.addEventListener("click", (event) => {
   if (action === "skip-task") skipTask();
   if (action === "flip-memory-card") flipMemoryCard(target);
   if (action === "add-team") addTeam();
-  if (action === "add-word") {
-    event.preventDefault();
-    addWord(target.closest("form"));
-  }
+  if (action === "toggle-word-extra") toggleWordExtra(target);
   if (action === "delete-team") deleteTeam(target);
   if (action === "delete-word") deleteWord(target);
   if (action === "clear-words") clearWords();
@@ -3660,8 +3488,6 @@ document.addEventListener("input", (event) => {
   const action = target.dataset.action;
   if (action === "edit-lesson") updateLessonField(target);
   if (action === "edit-tags") updateTags(target);
-  if (action === "edit-patterns") updatePatterns(target);
-  if (action === "edit-ask-patterns") updateAskPatterns(target);
   if (action === "teacher-token-input") updateTeacherTokenInput(target);
   if (action === "edit-memory-pairs") updateMemoryPairCount(target);
   if (action === "edit-word") updateWord(target);
@@ -3670,12 +3496,6 @@ document.addEventListener("input", (event) => {
 
 document.addEventListener("change", (event) => {
   const target = event.target;
-  if (target.dataset.action === "edit-ask-mode") {
-    updateAskMode(target);
-  }
-  if (target.dataset.action === "select-course") {
-    selectCourseFromPicker(target);
-  }
   if (target.dataset.action === "toggle-task") {
     toggleTask(target);
   }
