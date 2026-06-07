@@ -1361,6 +1361,14 @@ select:focus {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
+.lesson-task-settings {
+  margin-top: -4px;
+}
+
+.lesson-task-settings .setup-checks {
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+}
+
 .current-turn-panel {
   display: none;
 }

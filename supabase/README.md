@@ -14,6 +14,8 @@ This project stores shared course data in two public-schema tables:
 
 The schema enables Row Level Security. Public browser clients can read only published courses and their words. Teacher writes require the shared teacher password through the `x-teacher-token` request header.
 
+Course saves use the `save_course_with_words` RPC so course metadata and the full word list are updated inside one database transaction. Re-run `supabase/schema.sql` after pulling schema changes before deploying matching frontend changes.
+
 ## Environment values
 
 After creating a Supabase project, add these values to the local `.env` file:

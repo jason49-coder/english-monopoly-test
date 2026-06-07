@@ -85,6 +85,182 @@ $$;
 
 grant execute on function public.teacher_write_allowed() to anon, authenticated;
 
+create or replace function public.save_course_with_words(
+  p_course_id uuid,
+  p_slug text,
+  p_name text,
+  p_tags text[],
+  p_enabled_tasks text[],
+  p_is_published boolean,
+  p_words jsonb
+)
+returns table (id uuid, slug text, name text, word_count integer)
+language plpgsql
+security invoker
+set search_path = public
+as $$
+declare
+  saved_course public.courses%rowtype;
+  normalized_words jsonb := coalesce(p_words, '[]'::jsonb);
+  inserted_word_count integer := 0;
+  has_legacy_word_columns boolean := false;
+begin
+  if not public.teacher_write_allowed() then
+    raise sqlstate '42501' using message = 'Teacher write token is invalid.';
+  end if;
+
+  if p_course_id is not null then
+    update public.courses
+    set
+      slug = p_slug,
+      name = p_name,
+      tags = coalesce(p_tags, '{}'::text[]),
+      enabled_tasks = coalesce(p_enabled_tasks, array['say', 'sentence', 'spell', 'ask', 'act', 'choose']::text[]),
+      is_published = coalesce(p_is_published, true)
+    where courses.id = p_course_id
+    returning * into saved_course;
+
+    if saved_course.id is null then
+      raise exception 'Course not found';
+    end if;
+  else
+    insert into public.courses (
+      slug,
+      name,
+      tags,
+      enabled_tasks,
+      is_published
+    )
+    values (
+      p_slug,
+      p_name,
+      coalesce(p_tags, '{}'::text[]),
+      coalesce(p_enabled_tasks, array['say', 'sentence', 'spell', 'ask', 'act', 'choose']::text[]),
+      coalesce(p_is_published, true)
+    )
+    returning * into saved_course;
+  end if;
+
+  delete from public.words
+  where course_id = saved_course.id;
+
+  select
+    exists (
+      select 1
+      from information_schema.columns
+      where table_schema = 'public'
+        and table_name = 'words'
+        and column_name = 'word'
+    )
+    and exists (
+      select 1
+      from information_schema.columns
+      where table_schema = 'public'
+        and table_name = 'words'
+        and column_name = 'meaning'
+    )
+    and exists (
+      select 1
+      from information_schema.columns
+      where table_schema = 'public'
+        and table_name = 'words'
+        and column_name = 'category'
+    )
+  into has_legacy_word_columns;
+
+  if has_legacy_word_columns then
+    execute $insert$
+      insert into public.words (
+        course_id,
+        position,
+        en,
+        zh,
+        sentence,
+        phonetic,
+        image,
+        word,
+        meaning,
+        category
+      )
+      select
+        $1,
+        coalesce(item.position, item.fallback_position)::integer,
+        btrim(item.en),
+        btrim(item.zh),
+        coalesce(item.sentence, ''),
+        coalesce(item.phonetic, ''),
+        coalesce(item.image, ''),
+        btrim(item.en),
+        btrim(item.zh),
+        ''
+      from (
+        select
+          (row_number() over () - 1)::integer as fallback_position,
+          word_item.*
+        from jsonb_to_recordset($2) as word_item(
+          position integer,
+          en text,
+          zh text,
+          sentence text,
+          phonetic text,
+          image text
+        )
+      ) as item
+      where length(btrim(coalesce(item.en, ''))) > 0
+        and length(btrim(coalesce(item.zh, ''))) > 0
+    $insert$ using saved_course.id, normalized_words;
+  else
+    insert into public.words (
+      course_id,
+      position,
+      en,
+      zh,
+      sentence,
+      phonetic,
+      image
+    )
+    select
+      saved_course.id,
+      coalesce(item.position, item.fallback_position)::integer,
+      btrim(item.en),
+      btrim(item.zh),
+      coalesce(item.sentence, ''),
+      coalesce(item.phonetic, ''),
+      coalesce(item.image, '')
+    from (
+      select
+        (row_number() over () - 1)::integer as fallback_position,
+        word_item.*
+      from jsonb_to_recordset(normalized_words) as word_item(
+        position integer,
+        en text,
+        zh text,
+        sentence text,
+        phonetic text,
+        image text
+      )
+    ) as item
+    where length(btrim(coalesce(item.en, ''))) > 0
+      and length(btrim(coalesce(item.zh, ''))) > 0;
+  end if;
+
+  get diagnostics inserted_word_count = row_count;
+
+  return query
+  select saved_course.id, saved_course.slug, saved_course.name, inserted_word_count;
+end;
+$$;
+
+grant execute on function public.save_course_with_words(
+  uuid,
+  text,
+  text,
+  text[],
+  text[],
+  boolean,
+  jsonb
+) to anon, authenticated;
+
 drop policy if exists "Public can read published courses" on public.courses;
 create policy "Public can read published courses"
 on public.courses

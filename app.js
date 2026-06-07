@@ -94,7 +94,6 @@ let courseAutosaveTimer = null;
 let courseAutosaveQueued = false;
 let supabaseClient = null;
 let supabaseScriptPromise = null;
-let supabaseLegacyWordPayloadRequired = false;
 let cloudCourseLibrary = [];
 let teacherAccessUnlocked = false;
 const cloudSave = {
@@ -746,6 +745,15 @@ function normalizeTaskList(tasks, fallback = ["say"]) {
     : ["say"];
   const uniqueTasks = [...new Set(normalized)];
   return uniqueTasks.length ? uniqueTasks : [...new Set(fallbackTasks.length ? fallbackTasks : ["say"])];
+}
+
+function updateEnabledTaskList(tasks, task, enabled) {
+  if (!taskLabels[task]) return normalizeTaskList(tasks, ["say"]);
+  const current = normalizeTaskList(tasks, ["say"]);
+  const next = enabled
+    ? [...current, task]
+    : current.filter((item) => item !== task);
+  return normalizeTaskList(next, ["say"]);
 }
 
 function normalizeLesson(lesson) {
@@ -1469,6 +1477,7 @@ function renderTeacher() {
             <input id="lessonTags" value="${escapeAttr((state.lesson.tags || []).join(", "))}" data-action="edit-tags" placeholder="animals, food, phonics" />
           </div>
         </div>
+        ${renderLessonTaskSettings()}
         ${renderCourseReadinessNotice()}
         <div class="teacher-subhead word-bank-head">
           <div>
@@ -1480,6 +1489,23 @@ function renderTeacher() {
         ${renderCsvPanel()}
       </section>
     </section>
+  `;
+}
+
+function renderLessonTaskSettings() {
+  const enabledTasks = normalizeTaskList(state.lesson.enabledTasks, defaultLesson.enabledTasks);
+  return `
+    <div class="setup-block lesson-task-settings">
+      <span class="check-label">課程任務</span>
+      <div class="checks setup-checks">
+        ${Object.entries(taskLabels).map(([key, label]) => `
+          <label class="check-tile">
+            <input type="checkbox" data-action="toggle-lesson-task" data-task="${key}" ${enabledTasks.includes(key) ? "checked" : ""} />
+            ${label}
+          </label>
+        `).join("")}
+      </div>
+    </div>
   `;
 }
 
@@ -2463,7 +2489,7 @@ async function autosaveCurrentCourse() {
     saveState();
   } catch (error) {
     console.warn("Unable to autosave course to Supabase", error);
-    if (error.status === 401) {
+    if (isTeacherTokenError(error)) {
       clearTeacherWriteToken();
       cloudSave.tokenStatus = "invalid";
       cloudSave.tokenMessage = "寫入密碼錯誤，請重新登入後台。";
@@ -2525,7 +2551,7 @@ async function saveCurrentCourse() {
     showToast(`已寫入 Supabase：${result.name || lesson.name}`);
   } catch (error) {
     console.warn("Unable to save course to Supabase", error);
-    if (error.status === 401) {
+    if (isTeacherTokenError(error)) {
       clearTeacherWriteToken();
       cloudSave.tokenStatus = "invalid";
       cloudSave.tokenMessage = "寫入密碼錯誤，請重新輸入。";
@@ -2614,23 +2640,54 @@ async function saveCourseToCloud(lesson, token, saveContext = {}) {
     throw new Error("請至少新增一筆 en + zh 完整的單字再寫入 Supabase");
   }
 
-  const course = await saveSupabaseCourse(lesson, token, saveContext);
-  await replaceSupabaseWords(course.id, words, token);
+  const course = await saveSupabaseCourseWithWords(lesson, words, token, saveContext);
 
   return {
     id: course.id,
     slug: course.slug || lesson.slug,
     name: course.name || lesson.name,
-    wordCount: words.length,
+    wordCount: course.word_count != null ? Number(course.word_count) : words.length,
   };
 }
 
-async function saveSupabaseCourse(lesson, token, saveContext = {}) {
+async function saveSupabaseCourseWithWords(lesson, words, token, saveContext = {}) {
   const selectedId = saveContext.selectedCourse?.id || "";
-  if (saveContext.mode === "existing" && isUuid(selectedId)) {
-    return updateSupabaseCourse(selectedId, lesson, token);
+  const courseId = saveContext.mode === "existing" && isUuid(selectedId) ? selectedId : null;
+
+  const response = await fetchSupabaseRest("rpc/save_course_with_words", token, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      p_course_id: courseId,
+      p_slug: lesson.slug,
+      p_name: lesson.name,
+      p_tags: lesson.tags || [],
+      p_enabled_tasks: lesson.enabledTasks || [],
+      p_is_published: true,
+      p_words: getSupabaseWordPayload(words),
+    }),
+  });
+
+  const payload = await parseSupabaseCourseResponse(response);
+  const course = Array.isArray(payload) ? payload[0] : payload;
+  if (!course?.id) {
+    throw new Error("Supabase 沒有回傳課程 ID");
   }
-  return insertSupabaseCourse(lesson, token);
+
+  return course;
+}
+
+function getSupabaseWordPayload(words) {
+  return words.map((item, index) => ({
+    position: index,
+    en: item.en,
+    zh: item.zh,
+    sentence: "",
+    phonetic: item.phonetic || "",
+    image: item.image || "",
+  }));
 }
 
 function upsertCloudCourseAfterSave(result, lesson) {
@@ -2668,58 +2725,14 @@ function upsertCloudCourseAfterSave(result, lesson) {
   setCourseEditorCourse(savedCourse);
 }
 
-async function insertSupabaseCourse(lesson, token) {
-  const response = await fetchSupabaseRest("courses?select=id,slug,name", token, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Prefer": "return=representation",
-    },
-    body: JSON.stringify([getSupabaseCoursePayload(lesson)]),
-  });
-  const payload = await parseSupabaseCourseResponse(response);
-  const course = Array.isArray(payload) ? payload[0] : null;
-  if (!course?.id) {
-    throw new Error("Supabase 沒有回傳課程 ID");
-  }
-
-  return course;
-}
-
-async function updateSupabaseCourse(courseId, lesson, token) {
-  const response = await fetchSupabaseRest(`courses?id=eq.${encodeURIComponent(courseId)}&select=id,slug,name`, token, {
-    method: "PATCH",
-    headers: {
-      "Content-Type": "application/json",
-      "Prefer": "return=representation",
-    },
-    body: JSON.stringify(getSupabaseCoursePayload(lesson)),
-  });
-  const payload = await parseSupabaseCourseResponse(response);
-  const course = Array.isArray(payload) ? payload[0] : null;
-  if (!course?.id) {
-    throw new Error("Supabase 沒有回傳課程 ID");
-  }
-
-  return course;
-}
-
-function getSupabaseCoursePayload(lesson) {
-  return {
-    slug: lesson.slug,
-    name: lesson.name,
-    tags: lesson.tags || [],
-    enabled_tasks: lesson.enabledTasks || [],
-    is_published: true,
-  };
-}
-
 async function parseSupabaseCourseResponse(response) {
   try {
     return await parseSupabaseResponse(response);
   } catch (error) {
     if (error.status === 409) {
-      throw new Error("雲端已有相同網址代碼，請先載入該課程或改用其他代碼。");
+      const conflictError = new Error("雲端已有相同網址代碼，請先載入該課程或改用其他代碼。");
+      conflictError.status = 409;
+      throw conflictError;
     }
     throw error;
   }
@@ -2727,68 +2740,6 @@ async function parseSupabaseCourseResponse(response) {
 
 function isUuid(value) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(value || ""));
-}
-
-async function replaceSupabaseWords(courseId, words, token) {
-  const deleteResponse = await fetchSupabaseRest(`words?course_id=eq.${encodeURIComponent(courseId)}`, token, {
-    method: "DELETE",
-  });
-  await parseSupabaseResponse(deleteResponse);
-
-  if (!words.length) return;
-
-  const insertWords = (includeLegacyColumns = false) => fetchSupabaseRest("words", token, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Prefer": "return=minimal",
-    },
-    body: JSON.stringify(getSupabaseWordPayload(courseId, words, includeLegacyColumns)),
-  });
-
-  try {
-    const response = await insertWords(supabaseLegacyWordPayloadRequired);
-    await parseSupabaseResponse(response);
-  } catch (error) {
-    if (!supabaseLegacyWordPayloadRequired && isLegacyWordConstraintError(error)) {
-      supabaseLegacyWordPayloadRequired = true;
-      const retryResponse = await insertWords(true);
-      await parseSupabaseResponse(retryResponse);
-      return;
-    }
-    throw error;
-  }
-}
-
-function getSupabaseWordPayload(courseId, words, includeLegacyColumns = false) {
-  return words.map((item, index) => {
-    const payload = {
-      course_id: courseId,
-      position: index,
-      en: item.en,
-      zh: item.zh,
-      sentence: "",
-      phonetic: item.phonetic || "",
-      image: item.image || "",
-    };
-
-    if (includeLegacyColumns) {
-      payload.word = item.en;
-      payload.meaning = item.zh;
-      payload.category = "";
-    }
-
-    return payload;
-  });
-}
-
-function isLegacyWordConstraintError(error) {
-  const message = String(error?.message || "").toLowerCase();
-  return (
-    message.includes('null value in column "word"')
-    || message.includes('null value in column "meaning"')
-    || message.includes('null value in column "category"')
-  ) && message.includes('relation "words"');
 }
 
 async function fetchSupabaseRest(path, token, options = {}) {
@@ -2818,6 +2769,7 @@ async function parseSupabaseResponse(response) {
     const message = payload?.message || payload?.error || `Supabase 同步失敗 (${response.status})`;
     const error = new Error(message);
     error.status = response.status;
+    error.code = payload?.code || "";
     throw error;
   }
 
@@ -2891,7 +2843,7 @@ async function verifyTeacherWriteToken() {
     return true;
   } catch (error) {
     console.warn("Unable to verify teacher write token", error);
-    if (error.status === 401) {
+    if (isTeacherTokenError(error)) {
       clearTeacherWriteToken();
       teacherAccessUnlocked = false;
       cloudSave.tokenStatus = "invalid";
@@ -2925,6 +2877,12 @@ function createTeacherTokenError() {
   const error = new Error("寫入密碼錯誤");
   error.status = 401;
   return error;
+}
+
+function isTeacherTokenError(error) {
+  return error?.status === 401
+    || error?.status === 403
+    || error?.code === "42501";
 }
 
 function getTeacherWriteToken() {
@@ -3084,7 +3042,7 @@ async function deleteSavedCourse(target) {
     showToast(`已刪除雲端課程：${course.lesson.name}`);
   } catch (error) {
     console.warn("Unable to delete course", error);
-    if (error.status === 401) {
+    if (isTeacherTokenError(error)) {
       clearTeacherWriteToken();
       cloudSave.tokenStatus = "invalid";
       cloudSave.tokenMessage = "寫入密碼錯誤，請重新輸入。";
@@ -3295,14 +3253,20 @@ function toggleTask(target) {
   const task = target.dataset.task;
   if (!task) return;
 
-  if (target.checked) {
-    state.game.enabledTasks = normalizeTaskList([...state.game.enabledTasks, task], state.game.enabledTasks);
-  } else {
-    state.game.enabledTasks = state.game.enabledTasks.filter((item) => item !== task);
-    if (!state.game.enabledTasks.length) {
-      state.game.enabledTasks = ["say"];
-    }
+  state.game.enabledTasks = updateEnabledTaskList(state.game.enabledTasks, task, target.checked);
+  render();
+}
+
+function toggleLessonTask(target) {
+  const task = target.dataset.task;
+  if (!task) return;
+
+  state.lesson.enabledTasks = updateEnabledTaskList(state.lesson.enabledTasks, task, target.checked);
+  if (!state.game.started) {
+    state.game.enabledTasks = [...state.lesson.enabledTasks];
   }
+  saveState();
+  scheduleCourseAutosave();
   render();
 }
 
@@ -3648,6 +3612,9 @@ document.addEventListener("input", (event) => {
 
 document.addEventListener("change", (event) => {
   const target = event.target;
+  if (target.dataset.action === "toggle-lesson-task") {
+    toggleLessonTask(target);
+  }
   if (target.dataset.action === "toggle-task") {
     toggleTask(target);
   }
