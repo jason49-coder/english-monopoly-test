@@ -281,6 +281,7 @@ function buildMemoryCards(pairCount, imageMode = false) {
 function ensureMemoryShape() {
   const maxPairs = Math.min(12, getLessonWords().length);
   const pairCount = maxPairs ? clamp(Number(state.memory?.pairCount) || 6, 1, maxPairs) : 0;
+  const imageMode = Boolean(state.memory?.imageMode);
   const validCards = Array.isArray(state.memory?.cards)
     && state.memory.cards.length === pairCount * 2
     && state.memory.cards.every((card) => card?.id && card?.pairId && card?.text);
@@ -289,11 +290,13 @@ function ensureMemoryShape() {
     state.memory = freshMemoryState({
       teams: state.game.teams,
       pairCount,
+      imageMode,
       started: false,
     });
   }
 
   state.memory.pairCount = pairCount;
+  state.memory.imageMode = Boolean(state.memory.imageMode);
   state.memory.flippedIds = Array.isArray(state.memory.flippedIds) ? state.memory.flippedIds : [];
   state.memory.matchedIds = Array.isArray(state.memory.matchedIds) ? state.memory.matchedIds : [];
   state.memory.log = Array.isArray(state.memory.log) ? state.memory.log : ["選兩張牌，把英文和中文配成一組。"];
@@ -3192,7 +3195,8 @@ function startMemoryGame() {
   clearMemoryFeedback();
   state.memory = freshMemoryState({
     teams: state.game.teams,
-    pairCount: state.memory.pairCount,
+    pairCount: state.memory?.pairCount || 6,
+    imageMode: state.memory?.imageMode,
     started: true,
   });
   showToast("記憶翻牌開始");
@@ -3204,6 +3208,7 @@ function resetMemoryGame() {
   state.memory = freshMemoryState({
     teams: state.game.teams,
     pairCount: state.memory?.pairCount || 6,
+    imageMode: state.memory?.imageMode,
     started: false,
   });
   state.chromeCollapsed = false;
@@ -3242,7 +3247,7 @@ function updateTags(target) {
 function updateMemoryPairCount(target) {
   const maxPairs = Math.min(12, getLessonWords().length);
   state.memory.pairCount = maxPairs ? clamp(Number(target.value) || 1, 1, maxPairs) : 0;
-  state.memory.cards = buildMemoryCards(state.memory.pairCount);
+  state.memory.cards = buildMemoryCards(state.memory.pairCount, state.memory.imageMode);
   state.memory.flippedIds = [];
   state.memory.matchedIds = [];
   state.memory.started = false;
@@ -3286,7 +3291,11 @@ function addWord(form) {
   state.lesson.words.push(word);
   resetWordDrawPile();
   if (!state.memory.started) {
-    state.memory = freshMemoryState({ teams: state.game.teams, pairCount: state.memory?.pairCount || 6 });
+    state.memory = freshMemoryState({
+      teams: state.game.teams,
+      pairCount: state.memory?.pairCount || 6,
+      imageMode: state.memory?.imageMode,
+    });
   }
   form.reset();
   showToast(`已新增 ${word.en}`);
@@ -3302,7 +3311,11 @@ function updateWord(target) {
   if (field === "en" || field === "zh") {
     resetWordDrawPile();
     if (!state.memory.started) {
-      state.memory = freshMemoryState({ teams: state.game.teams, pairCount: state.memory?.pairCount || 6 });
+      state.memory = freshMemoryState({
+        teams: state.game.teams,
+        pairCount: state.memory?.pairCount || 6,
+        imageMode: state.memory?.imageMode,
+      });
     }
   }
   scheduleCourseAutosave();
@@ -3379,6 +3392,13 @@ function deleteWord(target) {
   const removed = state.lesson.words.splice(index, 1)[0];
   teacherUi.expandedWordIndexes.clear();
   resetWordDrawPile();
+  if (!state.memory.started) {
+    state.memory = freshMemoryState({
+      teams: state.game.teams,
+      pairCount: state.memory?.pairCount || 6,
+      imageMode: state.memory?.imageMode,
+    });
+  }
   showToast(removed ? `已刪除 ${normalizeWord(removed).en || "單字"}` : "已刪除");
   scheduleCourseAutosave();
   render();
@@ -3392,7 +3412,10 @@ function clearWords() {
     wordCount: getLessonWords().length,
     enabledTasks: state.game.enabledTasks,
   });
-  state.memory = freshMemoryState({ teams: state.game.teams });
+  state.memory = freshMemoryState({
+    teams: state.game.teams,
+    imageMode: state.memory?.imageMode,
+  });
   showToast("單字已清空");
   render();
 }
@@ -3433,7 +3456,11 @@ function importCsv() {
     wordCount: getLessonWords().length,
     enabledTasks: state.game.enabledTasks,
   });
-  state.memory = freshMemoryState({ teams: state.game.teams });
+  state.memory = freshMemoryState({
+    teams: state.game.teams,
+    pairCount: state.memory?.pairCount || 6,
+    imageMode: state.memory?.imageMode,
+  });
   textarea.value = "";
   showToast(`已匯入 ${words.length} 個單字`);
   scheduleCourseAutosave();
