@@ -32,7 +32,6 @@ jobs:
           rsync -av \
             --exclude '.git' \
             --exclude '.github' \
-            --exclude '.netlify' \
             --exclude '.tools' \
             --exclude 'supabase' \
             --exclude '.env' \
