@@ -166,6 +166,38 @@ select:focus {
   content: "";
 }
 
+.cloud-status-banner {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  align-items: center;
+  margin-top: 10px;
+  padding: 9px 12px;
+  border: 1px solid rgba(19, 139, 132, 0.2);
+  border-radius: 8px;
+  background: rgba(238, 250, 255, 0.92);
+  color: var(--muted);
+  font-size: 0.84rem;
+  font-weight: 850;
+  line-height: 1.35;
+}
+
+.cloud-status-banner strong {
+  color: #0f766e;
+  font-size: 0.84rem;
+  font-weight: 950;
+}
+
+.cloud-status-banner.is-error {
+  border-color: rgba(232, 86, 72, 0.28);
+  background: rgba(255, 241, 239, 0.92);
+  color: #b42920;
+}
+
+.cloud-status-banner.is-error strong {
+  color: #b42920;
+}
+
 .topbar-game-compact {
   grid-template-columns: auto minmax(0, 1fr);
   gap: 10px;

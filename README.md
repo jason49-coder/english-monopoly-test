@@ -32,6 +32,21 @@
 
 **schema 異動後請重新執行 `supabase/schema.sql`**，前端呼叫的 RPC 必須與資料庫版本一致。
 
+## Supabase 維護
+
+`.github/workflows/supabase-maintenance.yml` 每天會做兩件事：
+
+1. 寫入 `maintenance_heartbeat`，讓資料庫產生定期活動。
+2. 呼叫 `export_course_backup` RPC，匯出 `courses` / `words` JSON artifact，保留 30 天。
+
+GitHub repository 需要設定這個 Actions secret：
+
+- `TEACHER_WRITE_TOKEN`
+
+`SUPABASE_URL` 和 `SUPABASE_ANON_KEY` 會使用前端公開設定作為 fallback；如果之後換 Supabase 專案，也可以在 GitHub Actions secrets 裡新增同名值覆蓋。
+
+這個 workflow 可以降低 Free plan 專案被視為長期閒置的風險，也能保留課程備份；若要官方保證專案不被 paused，仍需使用 Supabase Pro organization。
+
 若要更換老師寫入密碼：
 
 1. 更新本機 `.env` 的 `TEACHER_WRITE_TOKEN`。

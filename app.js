@@ -7,6 +7,8 @@ const SUPABASE_PUBLIC_CONFIG = {
 };
 const SUPABASE_SCRIPT_SRC = "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2";
 const COURSE_AUTOSAVE_DELAY = 3200;
+const CLOUD_SYNC_MAX_ATTEMPTS = 8;
+const CLOUD_SYNC_RETRY_DELAY = 8000;
 
 const taskLabels = {
   say: "Read the word",
@@ -101,6 +103,12 @@ const cloudSave = {
   verifying: false,
   tokenStatus: "empty",
   tokenMessage: "",
+};
+const cloudSync = {
+  status: "idle",
+  attempt: 0,
+  message: "",
+  retryTimer: null,
 };
 const courseDelete = {
   pendingCourseId: "",
@@ -500,10 +508,16 @@ function loadSupabaseScript() {
   return supabaseScriptPromise;
 }
 
-async function syncCloudCourseLibrary() {
+async function syncCloudCourseLibrary(attempt = 1) {
+  clearTimeout(cloudSync.retryTimer);
+  cloudSync.retryTimer = null;
+  cloudSync.attempt = attempt;
+
   try {
     const client = await getSupabaseClientAsync();
     const cloudCourses = await fetchCloudCourses(client);
+    cloudSync.status = "ready";
+    cloudSync.message = "";
     saveCourseLibrary(cloudCourses);
     if (!cloudCourses.length) {
       render();
@@ -523,8 +537,20 @@ async function syncCloudCourseLibrary() {
     }
     render();
   } catch (error) {
-    saveCourseLibrary([]);
     console.warn("Unable to load Supabase courses.", error);
+    if (attempt < CLOUD_SYNC_MAX_ATTEMPTS) {
+      cloudSync.status = "retrying";
+      cloudSync.message = `雲端資料庫啟動中，正在重試 (${attempt}/${CLOUD_SYNC_MAX_ATTEMPTS})`;
+      cloudSync.retryTimer = setTimeout(() => {
+        syncCloudCourseLibrary(attempt + 1);
+      }, CLOUD_SYNC_RETRY_DELAY);
+      render();
+      return;
+    }
+
+    cloudSync.status = "error";
+    cloudSync.message = "雲端資料庫暫時無法連線，請稍後重新整理。";
+    saveCourseLibrary([]);
     render();
   }
 }
@@ -844,6 +870,7 @@ function render() {
   const app = document.querySelector("#app");
   app.innerHTML = `
     ${renderTopbar()}
+    ${renderCloudStatusBanner()}
     <main class="screen ${state.view === "teacher" ? "screen-teacher" : "screen-game"}">
       ${state.view === "teacher" ? renderTeacher() : renderGame()}
     </main>
@@ -856,6 +883,19 @@ function render() {
     const tl = document.querySelector(".team-list");
     if (tl) tl.scrollTop = teamListScroll;
   });
+}
+
+function renderCloudStatusBanner() {
+  if (!cloudSync.message || cloudSync.status === "ready") return "";
+
+  const isError = cloudSync.status === "error";
+  const title = isError ? "雲端連線異常" : "雲端資料庫啟動中";
+  return `
+    <div class="cloud-status-banner ${isError ? "is-error" : "is-retrying"}" role="status" aria-live="polite">
+      <strong>${escapeHtml(title)}</strong>
+      <span>${escapeHtml(cloudSync.message)}</span>
+    </div>
+  `;
 }
 
 function syncGameViewport() {

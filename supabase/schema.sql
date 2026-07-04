@@ -30,6 +30,15 @@ create table if not exists public.words (
   constraint words_position_nonnegative check (position >= 0)
 );
 
+create table if not exists public.maintenance_heartbeat (
+  id text primary key default 'github-actions',
+  checked_at timestamptz not null default now(),
+  source text not null default '',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint maintenance_heartbeat_id_not_blank check (length(btrim(id)) > 0)
+);
+
 create index if not exists courses_slug_idx on public.courses (slug);
 create index if not exists courses_updated_at_idx on public.courses (updated_at desc);
 create index if not exists words_course_position_idx on public.words (course_id, position, created_at);
@@ -55,16 +64,24 @@ create trigger words_set_updated_at
 before update on public.words
 for each row execute function public.set_updated_at();
 
+drop trigger if exists maintenance_heartbeat_set_updated_at on public.maintenance_heartbeat;
+create trigger maintenance_heartbeat_set_updated_at
+before update on public.maintenance_heartbeat
+for each row execute function public.set_updated_at();
+
 alter table public.courses enable row level security;
 alter table public.words enable row level security;
+alter table public.maintenance_heartbeat enable row level security;
 
 grant usage on schema public to anon, authenticated;
 grant select on public.courses to anon, authenticated;
 grant select on public.words to anon, authenticated;
+grant select, insert, update on public.maintenance_heartbeat to anon, authenticated;
 grant insert, update, delete on public.courses to anon, authenticated;
 grant insert, update, delete on public.words to anon, authenticated;
 grant all on public.courses to service_role;
 grant all on public.words to service_role;
+grant all on public.maintenance_heartbeat to service_role;
 
 create or replace function public.teacher_write_allowed()
 returns boolean
@@ -261,6 +278,34 @@ grant execute on function public.save_course_with_words(
   jsonb
 ) to anon, authenticated;
 
+create or replace function public.export_course_backup()
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if not public.teacher_write_allowed() then
+    raise sqlstate '42501' using message = 'Teacher write token is invalid.';
+  end if;
+
+  return jsonb_build_object(
+    'exported_at', now(),
+    'courses', coalesce((
+      select jsonb_agg(to_jsonb(c) order by c.updated_at desc)
+      from public.courses c
+    ), '[]'::jsonb),
+    'words', coalesce((
+      select jsonb_agg(to_jsonb(w) order by w.course_id, w.position, w.created_at)
+      from public.words w
+    ), '[]'::jsonb)
+  );
+end;
+$$;
+
+revoke all on function public.export_course_backup() from public;
+grant execute on function public.export_course_backup() to anon, authenticated;
+
 drop policy if exists "Public can read published courses" on public.courses;
 create policy "Public can read published courses"
 on public.courses
@@ -325,3 +370,25 @@ on public.words
 for delete
 to anon, authenticated
 using (public.teacher_write_allowed());
+
+drop policy if exists "Teachers can read maintenance heartbeat" on public.maintenance_heartbeat;
+create policy "Teachers can read maintenance heartbeat"
+on public.maintenance_heartbeat
+for select
+to anon, authenticated
+using (public.teacher_write_allowed());
+
+drop policy if exists "Teachers can insert maintenance heartbeat" on public.maintenance_heartbeat;
+create policy "Teachers can insert maintenance heartbeat"
+on public.maintenance_heartbeat
+for insert
+to anon, authenticated
+with check (public.teacher_write_allowed());
+
+drop policy if exists "Teachers can update maintenance heartbeat" on public.maintenance_heartbeat;
+create policy "Teachers can update maintenance heartbeat"
+on public.maintenance_heartbeat
+for update
+to anon, authenticated
+using (public.teacher_write_allowed())
+with check (public.teacher_write_allowed());
