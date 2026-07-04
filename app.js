@@ -1486,9 +1486,8 @@ function renderTeacher() {
             <div class="section-kicker">雲端管理</div>
             <h2>課程資料庫</h2>
           </div>
-          <button class="primary-button" data-action="go-game-url" ${busy ? "disabled" : ""}>前往遊戲入口</button>
+          ${renderTeacherHeaderActions(busy)}
         </div>
-        ${renderCourseEditorPanel()}
         ${renderCourseLibrary()}
       </aside>
       <section class="teacher-panel teacher-lesson-panel">
@@ -1533,6 +1532,15 @@ function renderTeacher() {
   `;
 }
 
+function renderTeacherHeaderActions(busy) {
+  return `
+    <div class="teacher-header-actions">
+      <button class="primary-button" data-action="go-game-url" ${busy ? "disabled" : ""}>前往遊戲入口</button>
+      <button class="plain-button teacher-logout-button" type="button" data-action="clear-teacher-token" ${busy ? "disabled" : ""}>登出後台</button>
+    </div>
+  `;
+}
+
 function renderLessonTaskSettings() {
   const enabledTasks = normalizeTaskList(state.lesson.enabledTasks, defaultLesson.enabledTasks);
   return `
@@ -1574,32 +1582,6 @@ function renderTeacherAuthGate() {
           <span class="cloud-token-status ${status.className}" role="status" aria-live="polite">${escapeHtml(status.message)}</span>
           <button class="plain-button" type="button" data-action="go-game-url">回遊戲入口</button>
         </div>
-      </div>
-    </section>
-  `;
-}
-
-function renderCourseEditorPanel() {
-  const isExisting = isEditingExistingCourse();
-  const modeLabel = isExisting ? "雲端課程" : "新課程草稿";
-  const activeSlug = createCourseSlug(state.lesson.slug || state.lesson.name);
-  const wordCount = getLessonWords().length;
-
-  return `
-    <section class="course-editor-panel">
-      <div class="course-editor-head">
-        <div class="course-editor-title">
-          <div class="section-kicker">目前課程</div>
-          <h3>${escapeHtml(state.lesson.name || "新課程")}</h3>
-          <span class="course-editor-meta">${escapeHtml(activeSlug)} · ${wordCount} 個單字</span>
-        </div>
-        <span class="course-mode-pill ${isExisting ? "is-existing" : "is-new"}">${modeLabel}</span>
-      </div>
-      ${renderCourseSyncPanel()}
-      <div class="course-editor-actions">
-        <button class="ghost-button" type="button" data-action="start-new-course">開新課程草稿</button>
-        <button class="ghost-button" type="button" data-action="duplicate-course">複製成新草稿</button>
-        <button class="ghost-button" type="button" data-action="copy-current-course-link" ${activeSlug ? "" : "disabled"}>複製遊戲連結</button>
       </div>
     </section>
   `;
@@ -1700,49 +1682,83 @@ function renderCsvPanel() {
 
 function renderCourseLibrary() {
   const courses = loadCourseLibrary();
+  const saving = cloudSave.saving;
+  const disabled = saving || cloudSave.verifying;
+  const isExisting = isEditingExistingCourse();
 
   return `
     <section class="course-library">
       <div class="course-library-head">
-        <div>
-          <div class="section-kicker">雲端課程</div>
-          <h3>Supabase 課程清單</h3>
+        <div class="course-library-title">
+          <div>
+            <div class="section-kicker">雲端課程</div>
+            <h3>Supabase 課程清單</h3>
+          </div>
+          <span class="course-count-pill">${courses.length} 門</span>
         </div>
-        <span class="course-count-pill">${courses.length} 門</span>
+        <div class="course-library-actions">
+          <button class="ghost-button" type="button" data-action="start-new-course">＋ 新增課程</button>
+        </div>
+      </div>
+      <div class="course-library-status-row">
+        <div class="course-library-sync">
+          ${renderCloudSyncBadge()}
+          ${isExisting ? "" : `<button class="success-button course-create-button" type="button" data-action="save-course" ${disabled ? "disabled" : ""}>${saving ? "建立中" : "建立課程"}</button>`}
+        </div>
       </div>
       ${courses.length ? `
         <div class="course-list">
           ${courses.map((course) => renderSavedCourse(course)).join("")}
         </div>
-      ` : `<div class="empty-state course-empty">目前沒有 Supabase 課程。建立目前課程後會顯示在這裡。</div>`}
+      ` : `<div class="empty-state course-empty">目前沒有 Supabase 課程。建立課程後會顯示在這裡。</div>`}
     </section>
   `;
 }
 
-function renderCourseSyncPanel() {
-  const saving = cloudSave.saving;
-  const disabled = saving || cloudSave.verifying;
-  const status = getTeacherWriteTokenStatus();
-  const saveLabel = getCloudSaveButtonLabel();
-  const isExisting = isEditingExistingCourse();
+function renderCloudSyncBadge() {
+  const status = getCloudSyncSummary();
 
   return `
-    <div class="course-sync-panel">
-      <div class="course-sync-status">
-        <div class="small-label">雲端同步</div>
-        <div class="cloud-token-status ${status.className}" role="status" aria-live="polite">${escapeHtml(status.message)}</div>
-      </div>
-      <div class="course-sync-actions">
-        <button class="success-button cloud-save-button" type="button" data-action="save-course" ${disabled ? "disabled" : ""}>${saving ? "同步中" : saveLabel}</button>
-        <button class="plain-button" type="button" data-action="clear-teacher-token" ${disabled ? "disabled" : ""}>登出後台</button>
-      </div>
-      ${isExisting ? "" : `<p class="course-sync-note">尚未建立到 Supabase；目前是草稿。</p>`}
-    </div>
+    <span class="cloud-sync-pill ${status.className}" role="status" aria-live="polite">${escapeHtml(status.message)}</span>
   `;
 }
 
-function getCloudSaveButtonLabel() {
-  return isEditingExistingCourse() ? "同步到 Supabase" : "建立到 Supabase";
+function getCloudSyncSummary() {
+  const isExisting = isEditingExistingCourse();
+
+  if (cloudSave.verifying) {
+    return { className: "is-muted", message: "雲端驗證中" };
+  }
+
+  if (cloudSave.saving) {
+    return { className: "is-muted", message: isExisting ? "自動同步中" : "建立中" };
+  }
+
+  if (!getTeacherWriteToken()) {
+    return { className: "is-muted", message: "雲端未登入" };
+  }
+
+  if (cloudSave.tokenStatus === "invalid") {
+    return { className: "is-error", message: "密碼需重登" };
+  }
+
+  if (cloudSave.tokenStatus === "error") {
+    return { className: "is-error", message: "同步失敗" };
+  }
+
+  if (!isExisting) {
+    return { className: "is-muted", message: "新課程未建立" };
+  }
+
+  if (courseAutosaveQueued || courseAutosaveTimer) {
+    return { className: "is-muted", message: "已排程同步" };
+  }
+
+  if (cloudSave.tokenStatus === "saved") {
+    return { className: "is-ok", message: cloudSave.tokenMessage || "已同步" };
+  }
+
+  return { className: "is-ok", message: "自動同步已啟用" };
 }
 
 function getTeacherWriteTokenStatus() {
@@ -1810,8 +1826,8 @@ function renderSavedCourse(course) {
         ${pendingDelete ? `<span class="course-delete-warning">將從 Supabase 刪除此課程與全部單字</span>` : ""}
       </div>
       <div class="course-actions">
-        <button class="ghost-button" type="button" data-action="copy-course-link" data-course-slug="${escapeAttr(lesson.slug || lesson.name)}">複製連結</button>
-        <button class="ghost-button" type="button" data-action="load-course" data-course-id="${escapeAttr(course.id)}" ${selected ? "disabled" : ""}>${selected ? "正在編輯" : "編輯"}</button>
+        ${selected ? "" : `<button class="ghost-button" type="button" data-action="load-course" data-course-id="${escapeAttr(course.id)}">編輯</button>`}
+        <button class="ghost-button" type="button" data-action="copy-course-link" data-course-slug="${escapeAttr(lesson.slug || lesson.name)}">複製網址</button>
         ${pendingDelete ? `
           <button class="ghost-button" type="button" data-action="cancel-delete-course" data-course-id="${escapeAttr(course.id)}" ${deleting ? "disabled" : ""}>取消</button>
           <button class="mini-button is-danger" type="button" data-action="confirm-delete-course" data-course-id="${escapeAttr(course.id)}" ${deleting ? "disabled" : ""}>${deleting ? "刪除中" : "確認刪除"}</button>
@@ -2840,6 +2856,13 @@ function updateTeacherTokenFeedback() {
     statusElement.textContent = status.message;
   }
 
+  const syncBadge = document.querySelector(".cloud-sync-pill");
+  if (syncBadge) {
+    const syncStatus = getCloudSyncSummary();
+    syncBadge.className = `cloud-sync-pill ${syncStatus.className}`;
+    syncBadge.textContent = syncStatus.message;
+  }
+
   const hasToken = Boolean(getTeacherWriteToken());
   const disabled = cloudSave.saving || cloudSave.verifying;
   const verifyButton = document.querySelector('[data-action="verify-teacher-token"]');
@@ -2849,7 +2872,7 @@ function updateTeacherTokenFeedback() {
   if (clearButton) clearButton.disabled = disabled || !hasToken;
   if (saveButton) {
     saveButton.disabled = disabled;
-    saveButton.textContent = cloudSave.saving ? "同步中" : getCloudSaveButtonLabel();
+    saveButton.textContent = cloudSave.saving ? "建立中" : "建立課程";
   }
 }
 
@@ -2986,7 +3009,7 @@ function startNewCourse() {
   state.courseEditor = freshCourseEditorState("new");
   state.view = "teacher";
   state.chromeCollapsed = false;
-  showToast("已開啟新課程");
+  showToast("已建立新的課程表單");
   render();
 }
 
