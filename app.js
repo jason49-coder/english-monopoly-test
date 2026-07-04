@@ -106,7 +106,6 @@ const cloudSave = {
 };
 const cloudSync = {
   status: "idle",
-  attempt: 0,
   message: "",
   retryTimer: null,
 };
@@ -511,7 +510,6 @@ function loadSupabaseScript() {
 async function syncCloudCourseLibrary(attempt = 1) {
   clearTimeout(cloudSync.retryTimer);
   cloudSync.retryTimer = null;
-  cloudSync.attempt = attempt;
 
   try {
     const client = await getSupabaseClientAsync();

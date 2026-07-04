@@ -23,14 +23,10 @@ jobs:
       - name: Check required secrets
         shell: bash
         run: |
-          missing=0
-          for name in SUPABASE_URL SUPABASE_ANON_KEY TEACHER_WRITE_TOKEN; do
-            if [ -z "${!name}" ]; then
-              echo "::error::$name is not configured"
-              missing=1
-            fi
-          done
-          exit "$missing"
+          if [ -z "${TEACHER_WRITE_TOKEN}" ]; then
+            echo "::error::TEACHER_WRITE_TOKEN is not configured"
+            exit 1
+          fi
 
       - name: Update Supabase heartbeat
         shell: bash
@@ -53,20 +49,15 @@ jobs:
   backup:
     name: Export course backup
     runs-on: ubuntu-latest
-    needs: heartbeat
     timeout-minutes: 5
     steps:
       - name: Check required secrets
         shell: bash
         run: |
-          missing=0
-          for name in SUPABASE_URL SUPABASE_ANON_KEY TEACHER_WRITE_TOKEN; do
-            if [ -z "${!name}" ]; then
-              echo "::error::$name is not configured"
-              missing=1
-            fi
-          done
-          exit "$missing"
+          if [ -z "${TEACHER_WRITE_TOKEN}" ]; then
+            echo "::error::TEACHER_WRITE_TOKEN is not configured"
+            exit 1
+          fi
 
       - name: Export Supabase courses and words
         shell: bash
