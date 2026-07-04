@@ -72,7 +72,7 @@ language sql
 stable
 as $$
   select encode(
-    digest(
+    extensions.digest(
       coalesce(
         nullif(current_setting('request.headers', true), '')::jsonb ->> 'x-teacher-token',
         ''
