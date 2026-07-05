@@ -1826,6 +1826,64 @@ select:focus {
   padding: 0 2px 2px;
 }
 
+.teacher-sync-bar {
+  position: sticky;
+  top: 10px;
+  z-index: 12;
+  display: grid;
+  min-width: 0;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px solid rgba(19, 139, 132, 0.18);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 8px 24px rgba(24, 34, 45, 0.1);
+  backdrop-filter: blur(12px);
+}
+
+.teacher-sync-bar.is-error {
+  border-color: rgba(214, 48, 32, 0.22);
+  background: rgba(255, 247, 246, 0.94);
+}
+
+.teacher-sync-main {
+  display: flex;
+  flex-wrap: wrap;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.teacher-sync-bar .cloud-sync-pill {
+  flex: 1 1 180px;
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+}
+
+.teacher-sync-count {
+  flex: 0 0 auto;
+  padding: 3px 8px;
+  border: 1px solid rgba(19, 139, 132, 0.12);
+  border-radius: 999px;
+  background: rgba(239, 253, 250, 0.86);
+  color: #0f766e;
+  font-size: 0.75rem;
+  font-weight: 900;
+  line-height: 1.25;
+  white-space: nowrap;
+}
+
+.teacher-sync-error {
+  margin: 0;
+  color: #b42920;
+  font-size: 0.78rem;
+  font-weight: 750;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
 .teacher-subhead {
   display: flex;
   align-items: center;
@@ -2106,13 +2164,45 @@ input[readonly] {
 
 .course-item {
   display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
   min-width: 0;
-  gap: 12px;
+  gap: 10px 12px;
+  align-items: start;
   padding: 12px;
   border: 1px solid rgba(24, 34, 45, 0.08);
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.86);
   box-shadow: 0 4px 0 rgba(24, 34, 45, 0.04);
+}
+
+.course-order-controls {
+  display: grid;
+  grid-row: 1 / span 2;
+  gap: 6px;
+  align-self: stretch;
+  align-content: start;
+}
+
+.course-order-button {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  padding: 0;
+  place-items: center;
+  border-color: rgba(19, 139, 132, 0.18);
+  background: rgba(239, 253, 250, 0.88);
+  color: #0f766e;
+  font-size: 0.95rem;
+  font-weight: 950;
+  line-height: 1;
+  box-shadow: none;
+}
+
+.course-order-button:disabled {
+  background: rgba(24, 34, 45, 0.04);
+  color: rgba(100, 116, 139, 0.54);
+  opacity: 1;
 }
 
 .course-item.is-selected {
@@ -2200,6 +2290,7 @@ input[readonly] {
 
 .course-actions {
   display: grid;
+  grid-column: 2;
   grid-template-columns: repeat(auto-fit, minmax(82px, 1fr));
   gap: 6px;
   min-width: 0;
@@ -2613,6 +2704,10 @@ input[readonly] {
     grid-template-columns: 1fr;
   }
 
+  .teacher-sync-bar {
+    top: 8px;
+  }
+
   .setup-grid {
     grid-template-columns: 1fr;
   }
@@ -2738,6 +2833,14 @@ input[readonly] {
   .memory-board-panel,
   .memory-side-panel {
     padding: 10px;
+  }
+
+  .teacher-sync-bar {
+    padding: 9px 10px;
+  }
+
+  .teacher-sync-main {
+    gap: 7px;
   }
 
   .hub-hero {

@@ -101,6 +101,7 @@ let teacherAccessUnlocked = false;
 const cloudSave = {
   saving: false,
   verifying: false,
+  operation: "",
   tokenStatus: "empty",
   tokenMessage: "",
 };
@@ -420,14 +421,44 @@ function loadCourseLibrary() {
   return cloudCourseLibrary
     .map(normalizeSavedCourse)
     .filter(Boolean)
-    .sort((a, b) => b.updatedAt - a.updatedAt);
+    .sort(compareSavedCourses);
 }
 
 function saveCourseLibrary(courses) {
   cloudCourseLibrary = Array.isArray(courses)
-    ? courses.map(normalizeSavedCourse).filter(Boolean).sort((a, b) => b.updatedAt - a.updatedAt)
+    ? courses.map(normalizeSavedCourse).filter(Boolean).sort(compareSavedCourses)
     : [];
   clearLegacyLocalCourseLibrary();
+}
+
+function compareSavedCourses(a, b) {
+  const orderDiff = getSavedCourseSortOrder(a) - getSavedCourseSortOrder(b);
+  if (orderDiff) return orderDiff;
+
+  const updatedDiff = (Number(b.updatedAt) || 0) - (Number(a.updatedAt) || 0);
+  if (updatedDiff) return updatedDiff;
+
+  return String(a.lesson?.name || "").localeCompare(String(b.lesson?.name || ""), "zh-Hant");
+}
+
+function getSavedCourseSortOrder(course) {
+  const value = Number(course?.sortOrder);
+  return Number.isFinite(value) ? value : 0;
+}
+
+function assignCourseSortOrders(courses) {
+  return courses
+    .map((course, index) => normalizeSavedCourse({
+      ...course,
+      sortOrder: index * 100,
+    }))
+    .filter(Boolean);
+}
+
+function getNewCourseSortOrder() {
+  const courses = loadCourseLibrary();
+  if (!courses.length) return 0;
+  return Math.min(...courses.map(getSavedCourseSortOrder)) - 100;
 }
 
 function clearLegacyLocalCourseLibrary() {
@@ -562,11 +593,22 @@ async function fetchCloudCourses(client, teacherToken = "") {
     }
   }
 
-  const { data: courses, error: coursesError } = await client
+  let { data: courses, error: coursesError } = await client
     .from("courses")
-    .select("id, slug, name, tags, enabled_tasks, created_at, updated_at")
+    .select("id, slug, name, tags, enabled_tasks, sort_order, created_at, updated_at")
     .eq("is_published", true)
+    .order("sort_order", { ascending: true })
     .order("updated_at", { ascending: false });
+
+  if (isMissingSortOrderError(coursesError)) {
+    const fallback = await client
+      .from("courses")
+      .select("id, slug, name, tags, enabled_tasks, created_at, updated_at")
+      .eq("is_published", true)
+      .order("updated_at", { ascending: false });
+    courses = fallback.data;
+    coursesError = fallback.error;
+  }
 
   if (coursesError) throw coursesError;
   if (!Array.isArray(courses) || !courses.length) return [];
@@ -598,11 +640,22 @@ async function fetchCloudCourses(client, teacherToken = "") {
 }
 
 async function fetchTeacherCloudCourses(token) {
-  const coursesResponse = await fetchSupabaseRest(
-    "courses?select=id,slug,name,tags,enabled_tasks,created_at,updated_at,is_published&order=updated_at.desc",
-    token
-  );
-  const courses = await parseSupabaseResponse(coursesResponse);
+  let courses;
+  try {
+    const coursesResponse = await fetchSupabaseRest(
+      "courses?select=id,slug,name,tags,enabled_tasks,sort_order,created_at,updated_at,is_published&order=sort_order.asc,updated_at.desc",
+      token
+    );
+    courses = await parseSupabaseResponse(coursesResponse);
+  } catch (error) {
+    if (!isMissingSortOrderError(error)) throw error;
+    const fallbackResponse = await fetchSupabaseRest(
+      "courses?select=id,slug,name,tags,enabled_tasks,created_at,updated_at,is_published&order=updated_at.desc",
+      token
+    );
+    courses = await parseSupabaseResponse(fallbackResponse);
+  }
+
   if (!Array.isArray(courses) || !courses.length) return [];
 
   const courseIds = courses.map((course) => course.id).filter(Boolean);
@@ -640,6 +693,7 @@ function mapCloudCourse(course, words) {
     },
     createdAt: Date.parse(course.created_at),
     updatedAt: Date.parse(course.updated_at),
+    sortOrder: Number(course.sort_order),
   });
 }
 
@@ -808,12 +862,15 @@ function normalizeSavedCourse(course) {
   if (!id) return null;
   const lesson = normalizeLesson(course.lesson || course);
   if (!lesson.name && !lesson.words.length) return null;
+  const rawSortOrder = course.sortOrder ?? course.sort_order;
+  const sortOrder = Number(rawSortOrder);
 
   return {
     id,
     lesson,
     createdAt: Number(course.createdAt) || Date.now(),
     updatedAt: Number(course.updatedAt) || Date.now(),
+    sortOrder: Number.isFinite(sortOrder) ? sortOrder : 0,
   };
 }
 
@@ -1551,6 +1608,7 @@ function renderTeacher() {
             <h2>設定與單字</h2>
           </div>
         </div>
+        ${renderTeacherSyncStatusBar()}
         <div class="teacher-subhead">
           <div>
             <div class="section-kicker">基本資料</div>
@@ -1751,35 +1809,76 @@ function renderCourseLibrary() {
           <button class="ghost-button" type="button" data-action="start-new-course">＋ 新增課程</button>
         </div>
       </div>
-      <div class="course-library-status-row">
-        <div class="course-library-sync">
-          ${renderCloudSyncBadge()}
-        </div>
-        ${cloudSave.tokenStatus === "error" && cloudSave.tokenMessage
-          ? `<p class="course-sync-error" role="alert">${escapeHtml(cloudSave.tokenMessage)}</p>`
-          : ""}
-      </div>
+      ${renderCourseLibraryStatusRow()}
       ${courses.length ? `
         <div class="course-list">
-          ${courses.map((course) => renderSavedCourse(course)).join("")}
+          ${courses.map((course, index) => renderSavedCourse(course, index, courses.length)).join("")}
         </div>
       ` : `<div class="empty-state course-empty">目前沒有 Supabase 課程。補齊第一筆完整單字後會自動建立並顯示在這裡。</div>`}
     </section>
   `;
 }
 
-// 只重繪左側課程清單（含同步狀態 pill），不動右側編輯區，
-// 這樣既有課程存檔後左邊會跟著更新名稱／網址代碼，又不會打斷正在輸入的欄位（含注音選字）。
+function renderCourseLibraryStatusRow() {
+  return `
+    <div class="course-library-status-row">
+      <div class="course-library-sync">
+        ${renderCloudSyncBadge({ live: false })}
+      </div>
+      ${cloudSave.tokenStatus === "error" && cloudSave.tokenMessage
+        ? `<p class="course-sync-error">${escapeHtml(cloudSave.tokenMessage)}</p>`
+        : ""}
+    </div>
+  `;
+}
+
+function renderTeacherSyncStatusBar() {
+  const status = getCloudSyncSummary();
+  const completeCount = getLessonWords().length;
+  const totalCount = Array.isArray(state.lesson.words) ? state.lesson.words.length : 0;
+
+  return `
+    <div class="teacher-sync-bar ${status.className}">
+      <div class="teacher-sync-main">
+        ${renderCloudSyncBadge()}
+        <span class="teacher-sync-count">${completeCount}/${totalCount} 筆完整</span>
+      </div>
+      ${cloudSave.tokenStatus === "error" && cloudSave.tokenMessage
+        ? `<p class="teacher-sync-error" role="alert">${escapeHtml(cloudSave.tokenMessage)}</p>`
+        : ""}
+    </div>
+  `;
+}
+
+function refreshCourseLibraryStatusRow() {
+  const row = document.querySelector(".course-library-status-row");
+  if (row) row.outerHTML = renderCourseLibraryStatusRow();
+}
+
+function refreshTeacherSyncBar() {
+  const bar = document.querySelector(".teacher-sync-bar");
+  if (bar) bar.outerHTML = renderTeacherSyncStatusBar();
+}
+
+function refreshSyncStatusSurfaces() {
+  refreshCourseLibraryStatusRow();
+  refreshTeacherSyncBar();
+}
+
+// 只刷新課程清單與同步狀態，不動右側輸入欄位，
+// 讓存檔回饋與左欄課程資訊更新時，不打斷正在輸入的欄位（含注音選字）。
 function refreshCourseLibraryPanel() {
   const panel = document.querySelector(".course-library");
   if (panel) panel.outerHTML = renderCourseLibrary();
+  refreshTeacherSyncBar();
 }
 
-function renderCloudSyncBadge() {
+function renderCloudSyncBadge(options = {}) {
   const status = getCloudSyncSummary();
+  const liveAttrs = options.live === false ? "" : ' role="status" aria-live="polite"';
 
   return `
-    <span class="cloud-sync-pill ${status.className}" role="status" aria-live="polite">${escapeHtml(status.message)}</span>
+    <span class="cloud-sync-pill ${status.className}"${liveAttrs}>${escapeHtml(status.message)}</span>
   `;
 }
 
@@ -1791,6 +1890,9 @@ function getCloudSyncSummary() {
   }
 
   if (cloudSave.saving) {
+    if (cloudSave.operation === "course-order") {
+      return { className: "is-muted", message: "排序同步中" };
+    }
     return { className: "is-muted", message: isExisting ? "自動同步中" : "建立中" };
   }
 
@@ -1863,11 +1965,12 @@ function getTeacherWriteTokenStatus() {
   return { className: "is-muted", message: "本分頁已記住密碼，可以同步 Supabase。" };
 }
 
-function renderSavedCourse(course) {
+function renderSavedCourse(course, index = 0, courseCount = 1) {
   const lesson = course.lesson;
   const selected = getSelectedCourse()?.id === course.id;
   const pendingDelete = courseDelete.pendingCourseId === course.id;
   const deleting = courseDelete.deletingCourseId === course.id;
+  const orderDisabled = cloudSave.saving || cloudSave.verifying || Boolean(courseAutosaveTimer) || courseAutosaveQueued;
   const tags = Array.isArray(lesson.tags) ? lesson.tags.filter(Boolean) : [];
   const metaItems = [
     `${lesson.words.filter(isCompleteWord).length} 個單字`,
@@ -1876,6 +1979,10 @@ function renderSavedCourse(course) {
 
   return `
     <article class="course-item ${selected ? "is-selected" : ""} ${pendingDelete ? "is-delete-pending" : ""}">
+      <div class="course-order-controls" aria-label="課程排序">
+        <button class="course-order-button" type="button" data-action="move-course" data-course-id="${escapeAttr(course.id)}" data-direction="up" title="上移" aria-label="上移 ${escapeAttr(lesson.name)}" ${index <= 0 || orderDisabled ? "disabled" : ""}>↑</button>
+        <button class="course-order-button" type="button" data-action="move-course" data-course-id="${escapeAttr(course.id)}" data-direction="down" title="下移" aria-label="下移 ${escapeAttr(lesson.name)}" ${index >= courseCount - 1 || orderDisabled ? "disabled" : ""}>↓</button>
+      </div>
       <div class="course-info">
         <div class="course-title-row">
           <strong>${escapeHtml(lesson.name)}</strong>
@@ -2700,6 +2807,7 @@ function prepareCourseForSave() {
       selectedCourse,
       lockedSlug: lesson.slug,
       isPublished: Boolean(completeWords.length),
+      sortOrder: getSavedCourseSortOrder(selectedCourse),
     };
   }
 
@@ -2742,6 +2850,7 @@ function prepareCourseForSave() {
     selectedCourse: null,
     lockedSlug: lesson.slug,
     isPublished: true,
+    sortOrder: getNewCourseSortOrder(),
   };
 }
 
@@ -2758,6 +2867,7 @@ async function saveCourseToCloud(lesson, token, saveContext = {}) {
     slug: course.slug || lesson.slug,
     name: course.name || lesson.name,
     wordCount: course.word_count != null ? Number(course.word_count) : words.length,
+    sortOrder: Number.isFinite(Number(course.sort_order)) ? Number(course.sort_order) : Number(saveContext.sortOrder),
   };
 }
 
@@ -2765,24 +2875,42 @@ async function saveSupabaseCourseWithWords(lesson, words, token, saveContext = {
   const selectedId = saveContext.selectedCourse?.id || "";
   const courseId = saveContext.mode === "existing" && isUuid(selectedId) ? selectedId : null;
 
-  const response = await fetchSupabaseRest("rpc/save_course_with_words", token, {
+  const payload = {
+    p_course_id: courseId,
+    p_slug: lesson.slug,
+    p_name: lesson.name,
+    p_tags: lesson.tags || [],
+    p_enabled_tasks: lesson.enabledTasks || [],
+    p_is_published: Boolean(saveContext.isPublished),
+    p_sort_order: Number.isFinite(Number(saveContext.sortOrder)) ? Number(saveContext.sortOrder) : null,
+    p_words: getSupabaseWordPayload(words),
+  };
+
+  let response = await fetchSupabaseRest("rpc/save_course_with_words", token, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({
-      p_course_id: courseId,
-      p_slug: lesson.slug,
-      p_name: lesson.name,
-      p_tags: lesson.tags || [],
-      p_enabled_tasks: lesson.enabledTasks || [],
-      p_is_published: Boolean(saveContext.isPublished),
-      p_words: getSupabaseWordPayload(words),
-    }),
+    body: JSON.stringify(payload),
   });
 
-  const payload = await parseSupabaseCourseResponse(response);
-  const course = Array.isArray(payload) ? payload[0] : payload;
+  let responsePayload;
+  try {
+    responsePayload = await parseSupabaseCourseResponse(response);
+  } catch (error) {
+    if (!isMissingSortOrderError(error)) throw error;
+    const { p_sort_order: _sortOrder, ...legacyPayload } = payload;
+    response = await fetchSupabaseRest("rpc/save_course_with_words", token, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(legacyPayload),
+    });
+    responsePayload = await parseSupabaseCourseResponse(response);
+  }
+
+  const course = Array.isArray(responsePayload) ? responsePayload[0] : responsePayload;
   if (!course?.id) {
     throw new Error("Supabase 沒有回傳課程 ID");
   }
@@ -2824,6 +2952,11 @@ function upsertCloudCourseAfterSave(result, lesson) {
     },
     createdAt: index >= 0 ? courses[index].createdAt : now,
     updatedAt: now,
+    sortOrder: Number.isFinite(Number(result.sortOrder))
+      ? Number(result.sortOrder)
+      : index >= 0
+        ? getSavedCourseSortOrder(courses[index])
+        : getNewCourseSortOrder(),
   });
 
   if (index >= 0) {
@@ -2832,7 +2965,7 @@ function upsertCloudCourseAfterSave(result, lesson) {
     courses.unshift(savedCourse);
   }
 
-  saveCourseLibrary(courses.sort((a, b) => b.updatedAt - a.updatedAt));
+  saveCourseLibrary(courses);
   setCourseEditorCourse(savedCourse);
 }
 
@@ -2854,6 +2987,20 @@ async function parseSupabaseCourseResponse(response) {
     }
     throw error;
   }
+}
+
+function isMissingSortOrderError(error) {
+  if (!error) return false;
+  const text = [
+    error.code,
+    error.message,
+    error.details,
+    error.hint,
+  ].filter(Boolean).join(" ").toLowerCase();
+
+  return text.includes("sort_order")
+    || text.includes("p_sort_order")
+    || text.includes("reorder_courses");
 }
 
 function isUuid(value) {
@@ -2917,12 +3064,7 @@ function updateTeacherTokenFeedback() {
     statusElement.textContent = status.message;
   }
 
-  const syncBadge = document.querySelector(".cloud-sync-pill");
-  if (syncBadge) {
-    const syncStatus = getCloudSyncSummary();
-    syncBadge.className = `cloud-sync-pill ${syncStatus.className}`;
-    syncBadge.textContent = syncStatus.message;
-  }
+  refreshSyncStatusSurfaces();
 
   const hasToken = Boolean(getTeacherWriteToken());
   const disabled = cloudSave.saving || cloudSave.verifying;
@@ -3104,6 +3246,89 @@ async function copyCourseLinkBySlug(slug) {
     showToast("遊戲連結已產生，可從網址列複製");
   }
   render();
+}
+
+async function moveSavedCourse(target) {
+  const courseId = target.dataset.courseId || "";
+  const direction = target.dataset.direction === "down" ? "down" : "up";
+  const token = getTeacherWriteToken();
+
+  if (!token) {
+    cloudSave.tokenStatus = "empty";
+    cloudSave.tokenMessage = "";
+    showToast("請先登入老師後台");
+    render();
+    return;
+  }
+
+  if (cloudSave.saving || cloudSave.verifying || courseAutosaveTimer || courseAutosaveQueued) {
+    showToast("同步完成後再調整排序");
+    render();
+    return;
+  }
+
+  const courses = loadCourseLibrary();
+  const currentIndex = courses.findIndex((course) => course.id === courseId);
+  const nextIndex = direction === "up" ? currentIndex - 1 : currentIndex + 1;
+  if (currentIndex < 0 || nextIndex < 0 || nextIndex >= courses.length) return;
+
+  const previousOrder = courses;
+  const reordered = [...courses];
+  [reordered[currentIndex], reordered[nextIndex]] = [reordered[nextIndex], reordered[currentIndex]];
+  const normalizedOrder = assignCourseSortOrders(reordered);
+  saveCourseLibrary(normalizedOrder);
+
+  cloudSave.saving = true;
+  cloudSave.operation = "course-order";
+  cloudSave.tokenStatus = cloudSave.tokenStatus === "saved" ? "saved" : "verified";
+  cloudSave.tokenMessage = "正在同步課程排序。";
+  refreshCourseLibraryPanel();
+
+  try {
+    await saveCourseOrderToCloud(normalizedOrder, token);
+    cloudSave.tokenStatus = "saved";
+    cloudSave.tokenMessage = `課程排序已同步：${new Intl.DateTimeFormat("zh-TW", {
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    }).format(new Date())}`;
+    showToast("課程排序已同步");
+  } catch (error) {
+    console.warn("Unable to reorder courses", error);
+    saveCourseLibrary(previousOrder);
+    if (isTeacherTokenError(error)) {
+      clearTeacherWriteToken();
+      cloudSave.tokenStatus = "invalid";
+      cloudSave.tokenMessage = "寫入密碼錯誤，請重新登入後台。";
+      showToast("寫入密碼錯誤，排序未同步");
+      render();
+      return;
+    }
+
+    cloudSave.tokenStatus = "error";
+    cloudSave.tokenMessage = isMissingSortOrderError(error)
+      ? "資料庫尚未套用課程排序 schema，請先更新 Supabase。"
+      : error.message || "課程排序同步失敗。";
+    showToast(cloudSave.tokenMessage);
+  } finally {
+    cloudSave.saving = false;
+    cloudSave.operation = "";
+    refreshCourseLibraryPanel();
+  }
+}
+
+async function saveCourseOrderToCloud(courses, token) {
+  const response = await fetchSupabaseRest("rpc/reorder_courses", token, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      p_course_ids: courses.map((course) => course.id),
+    }),
+  });
+
+  await parseSupabaseResponse(response);
 }
 
 function requestDeleteSavedCourse(target) {
@@ -3718,6 +3943,7 @@ document.addEventListener("click", (event) => {
   if (action === "verify-teacher-token") verifyTeacherWriteToken();
   if (action === "clear-teacher-token") clearTeacherTokenInput();
   if (action === "load-course") loadSavedCourse(target);
+  if (action === "move-course") moveSavedCourse(target);
   if (action === "request-delete-course") requestDeleteSavedCourse(target);
   if (action === "cancel-delete-course") cancelDeleteSavedCourse();
   if (action === "confirm-delete-course") deleteSavedCourse(target);

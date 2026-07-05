@@ -7,12 +7,16 @@ create table if not exists public.courses (
   tags text[] not null default '{}',
   enabled_tasks text[] not null default array['say', 'sentence', 'spell', 'ask', 'act', 'choose'],
   is_published boolean not null default true,
+  sort_order integer not null default 0,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   constraint courses_slug_key unique (slug),
   constraint courses_name_not_blank check (length(btrim(name)) > 0),
   constraint courses_slug_not_blank check (length(btrim(slug)) > 0)
 );
+
+alter table public.courses
+add column if not exists sort_order integer not null default 0;
 
 create table if not exists public.words (
   id uuid primary key default gen_random_uuid(),
@@ -40,6 +44,7 @@ create table if not exists public.maintenance_heartbeat (
 );
 
 create index if not exists courses_slug_idx on public.courses (slug);
+create index if not exists courses_sort_order_idx on public.courses (sort_order asc, updated_at desc);
 create index if not exists courses_updated_at_idx on public.courses (updated_at desc);
 create index if not exists words_course_position_idx on public.words (course_id, position, created_at);
 create index if not exists words_course_en_idx on public.words (course_id, en);
@@ -49,8 +54,37 @@ returns trigger
 language plpgsql
 as $$
 begin
+  if tg_table_schema = 'public' and tg_table_name = 'courses' then
+    if new.slug is not distinct from old.slug
+      and new.name is not distinct from old.name
+      and new.tags is not distinct from old.tags
+      and new.enabled_tasks is not distinct from old.enabled_tasks
+      and new.is_published is not distinct from old.is_published
+    then
+      return new;
+    end if;
+  end if;
+
   new.updated_at = now();
   return new;
+end;
+$$;
+
+do $$
+begin
+  if exists (select 1 from public.courses)
+    and not exists (select 1 from public.courses where sort_order <> 0)
+  then
+    update public.courses
+    set sort_order = ranked.sort_order
+    from (
+      select
+        id,
+        ((row_number() over (order by updated_at desc, created_at desc, id)) - 1) * 100 as sort_order
+      from public.courses
+    ) as ranked
+    where courses.id = ranked.id;
+  end if;
 end;
 $$;
 
@@ -102,6 +136,16 @@ $$;
 
 grant execute on function public.teacher_write_allowed() to anon, authenticated;
 
+drop function if exists public.save_course_with_words(
+  uuid,
+  text,
+  text,
+  text[],
+  text[],
+  boolean,
+  jsonb
+);
+
 create or replace function public.save_course_with_words(
   p_course_id uuid,
   p_slug text,
@@ -109,9 +153,10 @@ create or replace function public.save_course_with_words(
   p_tags text[],
   p_enabled_tasks text[],
   p_is_published boolean,
+  p_sort_order integer,
   p_words jsonb
 )
-returns table (id uuid, slug text, name text, word_count integer)
+returns table (id uuid, slug text, name text, word_count integer, sort_order integer)
 language plpgsql
 security invoker
 set search_path = public
@@ -166,7 +211,9 @@ begin
       name = p_name,
       tags = coalesce(p_tags, '{}'::text[]),
       enabled_tasks = coalesce(p_enabled_tasks, array['say', 'sentence', 'spell', 'ask', 'act', 'choose']::text[]),
-      is_published = coalesce(p_is_published, true)
+      is_published = coalesce(p_is_published, true),
+      sort_order = coalesce(p_sort_order, courses.sort_order),
+      updated_at = now()
     where courses.id = p_course_id
     returning * into saved_course;
 
@@ -179,14 +226,16 @@ begin
       name,
       tags,
       enabled_tasks,
-      is_published
+      is_published,
+      sort_order
     )
     values (
       p_slug,
       p_name,
       coalesce(p_tags, '{}'::text[]),
       coalesce(p_enabled_tasks, array['say', 'sentence', 'spell', 'ask', 'act', 'choose']::text[]),
-      coalesce(p_is_published, true)
+      coalesce(p_is_published, true),
+      coalesce(p_sort_order, coalesce((select min(sort_order) from public.courses), 100) - 100)
     )
     returning * into saved_course;
   end if;
@@ -297,8 +346,46 @@ begin
   get diagnostics inserted_word_count = row_count;
 
   return query
-  select saved_course.id, saved_course.slug, saved_course.name, inserted_word_count;
+  select saved_course.id, saved_course.slug, saved_course.name, inserted_word_count, saved_course.sort_order;
 end;
+$$;
+
+grant execute on function public.save_course_with_words(
+  uuid,
+  text,
+  text,
+  text[],
+  text[],
+  boolean,
+  integer,
+  jsonb
+) to anon, authenticated;
+
+create or replace function public.save_course_with_words(
+  p_course_id uuid,
+  p_slug text,
+  p_name text,
+  p_tags text[],
+  p_enabled_tasks text[],
+  p_is_published boolean,
+  p_words jsonb
+)
+returns table (id uuid, slug text, name text, word_count integer, sort_order integer)
+language sql
+security invoker
+set search_path = public
+as $$
+  select *
+  from public.save_course_with_words(
+    p_course_id,
+    p_slug,
+    p_name,
+    p_tags,
+    p_enabled_tasks,
+    p_is_published,
+    null::integer,
+    p_words
+  );
 $$;
 
 grant execute on function public.save_course_with_words(
@@ -310,6 +397,38 @@ grant execute on function public.save_course_with_words(
   boolean,
   jsonb
 ) to anon, authenticated;
+
+create or replace function public.reorder_courses(
+  p_course_ids uuid[]
+)
+returns void
+language plpgsql
+security invoker
+set search_path = public
+as $$
+begin
+  if not public.teacher_write_allowed() then
+    raise sqlstate '42501' using message = 'Teacher write token is invalid.';
+  end if;
+
+  if coalesce(array_length(p_course_ids, 1), 0) = 0 then
+    return;
+  end if;
+
+  update public.courses
+  set sort_order = ranked.sort_order
+  from (
+    select
+      course_id,
+      ((ordinality::integer - 1) * 100) as sort_order
+    from unnest(p_course_ids) with ordinality as ordered(course_id, ordinality)
+  ) as ranked
+  where courses.id = ranked.course_id;
+end;
+$$;
+
+revoke all on function public.reorder_courses(uuid[]) from public;
+grant execute on function public.reorder_courses(uuid[]) to anon, authenticated;
 
 -- 課程名稱全域唯一（忽略大小寫與前後空白），避免「新課程」「 新課程 」「新課程」大小寫差異被當成不同課程。
 -- 若既有資料已存在重複名稱，先跳過索引建立，讓上方 save_course_with_words 防覆蓋邏輯仍可先套用。
@@ -343,7 +462,7 @@ begin
   return jsonb_build_object(
     'exported_at', now(),
     'courses', coalesce((
-      select jsonb_agg(to_jsonb(c) order by c.updated_at desc)
+      select jsonb_agg(to_jsonb(c) order by c.sort_order asc, c.updated_at desc)
       from public.courses c
     ), '[]'::jsonb),
     'words', coalesce((

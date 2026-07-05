@@ -4,14 +4,16 @@ with upserted_course as (
     name,
     tags,
     enabled_tasks,
-    is_published
+    is_published,
+    sort_order
   )
   values (
     'unit-1-animals-food',
     'Unit 1 Animals and Food',
     array['animals', 'food'],
     array['say', 'sentence', 'spell', 'ask', 'act', 'choose'],
-    true
+    true,
+    0
   )
   on conflict (slug) do update
   set
@@ -19,6 +21,7 @@ with upserted_course as (
     tags = excluded.tags,
     enabled_tasks = excluded.enabled_tasks,
     is_published = excluded.is_published,
+    sort_order = excluded.sort_order,
     updated_at = now()
   returning id
 ),
