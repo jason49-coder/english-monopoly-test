@@ -513,7 +513,7 @@ async function syncCloudCourseLibrary(attempt = 1) {
 
   try {
     const client = await getSupabaseClientAsync();
-    const cloudCourses = await fetchCloudCourses(client);
+    const cloudCourses = await fetchCloudCourses(client, isTeacherUnlocked() ? getTeacherWriteToken() : "");
     cloudSync.status = "ready";
     cloudSync.message = "";
     saveCourseLibrary(cloudCourses);
@@ -553,7 +553,15 @@ async function syncCloudCourseLibrary(attempt = 1) {
   }
 }
 
-async function fetchCloudCourses(client) {
+async function fetchCloudCourses(client, teacherToken = "") {
+  if (teacherToken) {
+    try {
+      return await fetchTeacherCloudCourses(teacherToken);
+    } catch (error) {
+      console.warn("Unable to fetch teacher courses; falling back to published courses.", error);
+    }
+  }
+
   const { data: courses, error: coursesError } = await client
     .from("courses")
     .select("id, slug, name, tags, enabled_tasks, created_at, updated_at")
@@ -576,6 +584,37 @@ async function fetchCloudCourses(client) {
       .order("created_at", { ascending: true });
 
     if (wordsError) throw wordsError;
+    (words || []).forEach((item) => {
+      if (!wordsByCourseId.has(item.course_id)) {
+        wordsByCourseId.set(item.course_id, []);
+      }
+      wordsByCourseId.get(item.course_id).push(normalizeWord(item));
+    });
+  }
+
+  return courses
+    .map((course) => mapCloudCourse(course, wordsByCourseId.get(course.id) || []))
+    .filter(Boolean);
+}
+
+async function fetchTeacherCloudCourses(token) {
+  const coursesResponse = await fetchSupabaseRest(
+    "courses?select=id,slug,name,tags,enabled_tasks,created_at,updated_at,is_published&order=updated_at.desc",
+    token
+  );
+  const courses = await parseSupabaseResponse(coursesResponse);
+  if (!Array.isArray(courses) || !courses.length) return [];
+
+  const courseIds = courses.map((course) => course.id).filter(Boolean);
+  const wordsByCourseId = new Map(courseIds.map((courseId) => [courseId, []]));
+
+  if (courseIds.length) {
+    const idFilter = courseIds.map((courseId) => encodeURIComponent(courseId)).join(",");
+    const wordsResponse = await fetchSupabaseRest(
+      `words?select=course_id,position,en,zh,sentence,phonetic,image,created_at&course_id=in.(${idFilter})&order=course_id.asc,position.asc,created_at.asc`,
+      token
+    );
+    const words = await parseSupabaseResponse(wordsResponse);
     (words || []).forEach((item) => {
       if (!wordsByCourseId.has(item.course_id)) {
         wordsByCourseId.set(item.course_id, []);
@@ -655,16 +694,33 @@ function freshCourseEditorState(mode = "new", course = null) {
 }
 
 function ensureCourseEditorShape() {
-  const courses = loadCourseLibrary();
   const editor = state.courseEditor && typeof state.courseEditor === "object"
     ? state.courseEditor
     : freshCourseEditorState("new");
-  const mode = editor.mode === "existing" ? "existing" : editor.mode === "new" ? "new" : "";
-  const selectedCourse = findCourseByIdentity(editor.selectedCourseId, editor.lockedSlug)
-    || getActiveCourseFromLibrary(courses);
 
-  if (selectedCourse && (mode !== "new" || activeLessonMatchesCourse(selectedCourse))) {
-    state.courseEditor = freshCourseEditorState("existing", selectedCourse);
+  // 課程身份只認 selectedCourseId（真正的課程 UUID），而且只由明確操作設定：
+  // 點課程清單「編輯」(loadCourseById)、雲端載入、以及存檔成功後。
+  // 這裡「絕不」從 slug/name 文字反推「這份草稿其實是某門既有課程」，
+  // 所以全新草稿永遠不會在打字/render 時被自動綁到別門課的 id 上、再被 autosave 覆蓋。
+  if (editor.mode === "existing" && editor.selectedCourseId) {
+    const courses = loadCourseLibrary();
+    const selectedCourse = courses.find((course) => course.id === editor.selectedCourseId);
+    if (selectedCourse) {
+      state.courseEditor = freshCourseEditorState("existing", selectedCourse);
+      return;
+    }
+    // 綁定的課程已不在課程庫。只有在課程庫「確實載入且不含此 id」時才降級為新草稿；
+    // 若課程庫還是空的（初次雲端同步尚未完成），保留原綁定，等同步後再依 id 解析，
+    // 避免重整編輯中課程時暫時掉成新草稿而弄丟 id。
+    if (courses.length) {
+      state.courseEditor = freshCourseEditorState("new");
+      return;
+    }
+    state.courseEditor = {
+      mode: "existing",
+      selectedCourseId: editor.selectedCourseId,
+      lockedSlug: editor.lockedSlug || "",
+    };
     return;
   }
 
@@ -682,16 +738,8 @@ function setCourseEditorForLesson(lesson, preferredCourse = null) {
 
 function getSelectedCourse() {
   const editor = state.courseEditor || {};
-  return findCourseByIdentity(editor.selectedCourseId, editor.lockedSlug)
-    || getActiveCourseFromLibrary();
-}
-
-function findCourseByIdentity(courseId, slug, courses = loadCourseLibrary()) {
-  if (courseId) {
-    const byId = courses.find((course) => course.id === courseId);
-    if (byId) return byId;
-  }
-  return slug ? findCourseBySlug(slug, courses) : null;
+  if (editor.mode !== "existing" || !editor.selectedCourseId) return null;
+  return loadCourseLibrary().find((course) => course.id === editor.selectedCourseId) || null;
 }
 
 function findCourseBySlug(slug, courses = loadCourseLibrary()) {
@@ -702,28 +750,13 @@ function findCourseBySlug(slug, courses = loadCourseLibrary()) {
   )) || null;
 }
 
-function getActiveCourseFromLibrary(courses = loadCourseLibrary()) {
-  const activeCourse = findCourseBySlug(state.lesson?.slug || state.lesson?.name, courses);
-  return activeCourse && activeLessonMatchesCourse(activeCourse) ? activeCourse : null;
-}
-
-function activeLessonMatchesCourse(course) {
-  const activeSlug = createCourseSlug(state.lesson?.slug || state.lesson?.name);
-  const courseSlug = createCourseSlug(course?.lesson?.slug || course?.lesson?.name);
-  if (!activeSlug || activeSlug !== courseSlug) return false;
-
-  const activeName = String(state.lesson?.name || "").trim();
-  const courseName = String(course?.lesson?.name || "").trim();
-  return !activeName || !courseName || activeName === courseName;
-}
-
 function isEditingExistingCourse() {
   return state.courseEditor?.mode === "existing" && Boolean(getSelectedCourse());
 }
 
 function createBlankLesson() {
   return {
-    name: "新課程",
+    name: createUniqueCourseName("新課程"),
     slug: createUniqueCourseSlug("new-course"),
     tags: [],
     enabledTasks: [...defaultLesson.enabledTasks],
@@ -746,6 +779,27 @@ function createUniqueCourseSlug(baseSlug, ignoreCourseId = "") {
   }
 
   return slug;
+}
+
+// 產生一個尚未被使用的課程名稱（忽略大小寫與前後空白），與 courses_name_lower_key 唯一約束對齊。
+// 新草稿的預設名稱（「新課程」「X 副本」等）若不去重，之後自動建立時會直接撞名而失敗。
+function createUniqueCourseName(baseName, ignoreCourseId = "") {
+  const courses = loadCourseLibrary();
+  const base = String(baseName || "新課程").trim() || "新課程";
+  const isTaken = (candidate) => {
+    const key = candidate.trim().toLowerCase();
+    return courses.some((course) => (
+      course.id !== ignoreCourseId
+      && String(course.lesson?.name || "").trim().toLowerCase() === key
+    ));
+  };
+  let name = base;
+  let suffix = 2;
+  while (isTaken(name)) {
+    name = `${base} ${suffix}`;
+    suffix += 1;
+  }
+  return name;
 }
 
 function normalizeSavedCourse(course) {
@@ -1682,9 +1736,6 @@ function renderCsvPanel() {
 
 function renderCourseLibrary() {
   const courses = loadCourseLibrary();
-  const saving = cloudSave.saving;
-  const disabled = saving || cloudSave.verifying;
-  const isExisting = isEditingExistingCourse();
 
   return `
     <section class="course-library">
@@ -1703,16 +1754,25 @@ function renderCourseLibrary() {
       <div class="course-library-status-row">
         <div class="course-library-sync">
           ${renderCloudSyncBadge()}
-          ${isExisting ? "" : `<button class="success-button course-create-button" type="button" data-action="save-course" ${disabled ? "disabled" : ""}>${saving ? "建立中" : "建立課程"}</button>`}
         </div>
+        ${cloudSave.tokenStatus === "error" && cloudSave.tokenMessage
+          ? `<p class="course-sync-error" role="alert">${escapeHtml(cloudSave.tokenMessage)}</p>`
+          : ""}
       </div>
       ${courses.length ? `
         <div class="course-list">
           ${courses.map((course) => renderSavedCourse(course)).join("")}
         </div>
-      ` : `<div class="empty-state course-empty">目前沒有 Supabase 課程。建立課程後會顯示在這裡。</div>`}
+      ` : `<div class="empty-state course-empty">目前沒有 Supabase 課程。補齊第一筆完整單字後會自動建立並顯示在這裡。</div>`}
     </section>
   `;
+}
+
+// 只重繪左側課程清單（含同步狀態 pill），不動右側編輯區，
+// 這樣既有課程存檔後左邊會跟著更新名稱／網址代碼，又不會打斷正在輸入的欄位（含注音選字）。
+function refreshCourseLibraryPanel() {
+  const panel = document.querySelector(".course-library");
+  if (panel) panel.outerHTML = renderCourseLibrary();
 }
 
 function renderCloudSyncBadge() {
@@ -1747,7 +1807,12 @@ function getCloudSyncSummary() {
   }
 
   if (!isExisting) {
-    return { className: "is-muted", message: "新課程未建立" };
+    if (courseAutosaveQueued || courseAutosaveTimer) {
+      return { className: "is-muted", message: "已排程建立課程" };
+    }
+    return getLessonWords().length
+      ? { className: "is-muted", message: "整理中，將自動建立課程" }
+      : { className: "is-muted", message: "補一筆完整單字後自動建立課程" };
   }
 
   if (courseAutosaveQueued || courseAutosaveTimer) {
@@ -2477,12 +2542,14 @@ function cancelCourseAutosave() {
 }
 
 function canQueueCourseAutosave() {
+  // 既有課程走更新；全新草稿在補齊第一筆完整單字後也會自動建立（不再需要「建立課程」按鈕）。
+  const isExisting = isEditingExistingCourse();
+  const hasCompleteWords = Boolean(getLessonWords().length);
   return state.view === "teacher"
     && isTeacherUnlocked()
-    && isEditingExistingCourse()
     && Boolean(getTeacherWriteToken())
-    && Boolean(getLessonWords().length)
-    && !getIncompleteWords().length;
+    && !getIncompleteWords().length
+    && (isExisting || (state.courseEditor?.mode === "new" && hasCompleteWords));
 }
 
 function canAutosaveCourse() {
@@ -2522,16 +2589,22 @@ async function autosaveCurrentCourse() {
   if (!canAutosaveCourse()) return;
 
   const prepared = prepareCourseForSave();
-  if (!prepared.ok || prepared.mode !== "existing") {
+  if (!prepared.ok) {
+    // 名稱／網址代碼衝突等問題：已無「建立課程」按鈕代為提示，改在左欄狀態列顯示完整原因，避免靜默不同步。
+    cloudSave.tokenStatus = "error";
+    cloudSave.tokenMessage = prepared.message || "課程尚未同步。";
+    refreshCourseLibraryPanel();
     return;
   }
 
+  // 全新草稿第一次通過（有完整單字、名稱/代碼不衝突）就在此自動建立並發布課程。
+  const isFirstPublish = prepared.mode === "new";
   const token = getTeacherWriteToken();
   const lesson = normalizeLesson(prepared.lesson);
   state.lesson = lesson;
   cloudSave.saving = true;
   cloudSave.tokenStatus = cloudSave.tokenStatus === "saved" ? "saved" : "verified";
-  cloudSave.tokenMessage = "正在自動同步 Supabase。";
+  cloudSave.tokenMessage = isFirstPublish ? "正在建立課程並同步 Supabase。" : "正在自動同步 Supabase。";
   updateTeacherTokenFeedback();
 
   try {
@@ -2544,6 +2617,14 @@ async function autosaveCurrentCourse() {
       second: "2-digit",
     }).format(new Date())}`;
     saveState();
+    if (isFirstPublish) {
+      // 剛從草稿轉為正式課程：需要 render 讓課程清單顯示新課程、並切換成既有課程的 UI。
+      showToast(`已自動建立並發布課程：${result.name || lesson.name}`);
+      render();
+    } else {
+      // 既有課程更新成功：只刷新左側清單顯示新的名稱／網址代碼，不重繪右側以免打斷輸入。
+      refreshCourseLibraryPanel();
+    }
   } catch (error) {
     console.warn("Unable to autosave course to Supabase", error);
     if (isTeacherTokenError(error)) {
@@ -2570,60 +2651,6 @@ async function autosaveCurrentCourse() {
   }
 }
 
-async function saveCurrentCourse() {
-  if (cloudSave.saving) return;
-  cancelCourseAutosave();
-
-  const prepared = prepareCourseForSave();
-  if (!prepared.ok) {
-    showToast(prepared.message);
-    render();
-    return;
-  }
-
-  const token = getTeacherWriteToken();
-  if (!token) {
-    cloudSave.tokenStatus = "empty";
-    cloudSave.tokenMessage = "";
-    showToast("請先輸入寫入密碼，課程只會儲存到 Supabase");
-    render();
-    return;
-  }
-
-  const lesson = normalizeLesson(prepared.lesson);
-  state.lesson = lesson;
-  cloudSave.saving = true;
-  showToast("正在寫入 Supabase");
-  render();
-
-  try {
-    if (cloudSave.tokenStatus !== "verified" && !(await verifyTeacherWriteTokenValue(token))) {
-      throw createTeacherTokenError();
-    }
-
-    const result = await saveCourseToCloud(lesson, token, prepared);
-    upsertCloudCourseAfterSave(result, lesson);
-    cloudSave.tokenStatus = "saved";
-    cloudSave.tokenMessage = `已成功寫入：${result.name || lesson.name}`;
-    showToast(`已寫入 Supabase：${result.name || lesson.name}`);
-  } catch (error) {
-    console.warn("Unable to save course to Supabase", error);
-    if (isTeacherTokenError(error)) {
-      clearTeacherWriteToken();
-      cloudSave.tokenStatus = "invalid";
-      cloudSave.tokenMessage = "寫入密碼錯誤，請重新輸入。";
-      showToast("寫入密碼錯誤，已清除本次密碼");
-    } else {
-      cloudSave.tokenStatus = "error";
-      cloudSave.tokenMessage = error.message || "同步到 Supabase 失敗，課程未儲存。";
-      showToast(error.message || "同步到 Supabase 失敗，課程未儲存");
-    }
-  } finally {
-    cloudSave.saving = false;
-    render();
-  }
-}
-
 function prepareCourseForSave() {
   const lesson = normalizeLesson(state.lesson);
   const courses = loadCourseLibrary();
@@ -2635,13 +2662,6 @@ function prepareCourseForSave() {
     return {
       ok: false,
       message: `${incompleteWords.length} 筆單字缺少 en 或 zh，請補齊後再同步。`,
-    };
-  }
-
-  if (!completeWords.length) {
-    return {
-      ok: false,
-      message: "請至少新增一筆 en + zh 完整的單字。",
     };
   }
 
@@ -2659,6 +2679,19 @@ function prepareCourseForSave() {
       };
     }
 
+    const nameKey = String(lesson.name || "").trim().toLowerCase();
+    const nameCollision = courses.find((course) => (
+      course.id !== selectedCourse?.id
+      && String(course.lesson?.name || "").trim().toLowerCase() === nameKey
+    ));
+
+    if (nameCollision) {
+      return {
+        ok: false,
+        message: `課程名稱已被「${nameCollision.lesson.name}」使用，請換一個名稱。`,
+      };
+    }
+
     state.lesson = lesson;
     return {
       ok: true,
@@ -2666,6 +2699,14 @@ function prepareCourseForSave() {
       lesson,
       selectedCourse,
       lockedSlug: lesson.slug,
+      isPublished: Boolean(completeWords.length),
+    };
+  }
+
+  if (!completeWords.length) {
+    return {
+      ok: false,
+      message: "請至少新增一筆 en + zh 完整的單字。",
     };
   }
 
@@ -2681,6 +2722,18 @@ function prepareCourseForSave() {
     };
   }
 
+  const nameKey = String(lesson.name || "").trim().toLowerCase();
+  const nameCollision = courses.find((course) => (
+    String(course.lesson?.name || "").trim().toLowerCase() === nameKey
+  ));
+
+  if (nameCollision) {
+    return {
+      ok: false,
+      message: `課程名稱已屬於「${nameCollision.lesson.name}」，請先載入該課程或改用其他名稱。`,
+    };
+  }
+
   state.lesson = lesson;
   return {
     ok: true,
@@ -2688,12 +2741,13 @@ function prepareCourseForSave() {
     lesson,
     selectedCourse: null,
     lockedSlug: lesson.slug,
+    isPublished: true,
   };
 }
 
 async function saveCourseToCloud(lesson, token, saveContext = {}) {
   const words = lesson.words.filter(isCompleteWord);
-  if (!words.length) {
+  if (!words.length && saveContext.mode !== "existing") {
     throw new Error("請至少新增一筆 en + zh 完整的單字再寫入 Supabase");
   }
 
@@ -2722,7 +2776,7 @@ async function saveSupabaseCourseWithWords(lesson, words, token, saveContext = {
       p_name: lesson.name,
       p_tags: lesson.tags || [],
       p_enabled_tasks: lesson.enabledTasks || [],
-      p_is_published: true,
+      p_is_published: Boolean(saveContext.isPublished),
       p_words: getSupabaseWordPayload(words),
     }),
   });
@@ -2786,9 +2840,16 @@ async function parseSupabaseCourseResponse(response) {
   try {
     return await parseSupabaseResponse(response);
   } catch (error) {
-    if (error.status === 409) {
-      const conflictError = new Error("雲端已有相同網址代碼，請先載入該課程或改用其他代碼。");
+    if (error.code === "23505") {
+      const lowerMessage = String(error.message || "").toLowerCase();
+      const conflictTarget = lowerMessage.includes("courses_name_lower_key")
+        ? "課程名稱"
+        : lowerMessage.includes("courses_slug_key")
+          ? "課程網址代碼"
+          : "課程資料";
+      const conflictError = new Error(`雲端已有相同${conflictTarget}，請換一個值或載入既有課程。`);
       conflictError.status = 409;
+      conflictError.code = error.code;
       throw conflictError;
     }
     throw error;
@@ -2867,13 +2928,8 @@ function updateTeacherTokenFeedback() {
   const disabled = cloudSave.saving || cloudSave.verifying;
   const verifyButton = document.querySelector('[data-action="verify-teacher-token"]');
   const clearButton = document.querySelector('[data-action="clear-teacher-token"]');
-  const saveButton = document.querySelector('[data-action="save-course"]');
   if (verifyButton) verifyButton.disabled = disabled || !hasToken;
   if (clearButton) clearButton.disabled = disabled || !hasToken;
-  if (saveButton) {
-    saveButton.disabled = disabled;
-    saveButton.textContent = cloudSave.saving ? "建立中" : "建立課程";
-  }
 }
 
 async function verifyTeacherWriteToken() {
@@ -2904,6 +2960,7 @@ async function verifyTeacherWriteToken() {
     cloudSave.tokenStatus = "verified";
     cloudSave.tokenMessage = "密碼正確，可以寫入 Supabase。";
     showToast("寫入密碼已驗證");
+    await syncCloudCourseLibrary();
     return true;
   } catch (error) {
     console.warn("Unable to verify teacher write token", error);
@@ -3017,13 +3074,15 @@ function duplicateCurrentCourse() {
   cancelCourseAutosave();
   const lesson = normalizeLesson(state.lesson);
   const baseSlug = createCourseSlug(`${lesson.slug || lesson.name}-copy`);
-  lesson.name = `${lesson.name} 副本`;
+  lesson.name = createUniqueCourseName(`${lesson.name} 副本`);
   lesson.slug = createUniqueCourseSlug(baseSlug);
   setActiveLesson(lesson);
   state.courseEditor = freshCourseEditorState("new");
   state.view = "teacher";
   state.chromeCollapsed = false;
   showToast("已複製成新課程草稿");
+  // 複製出來的草稿已帶完整單字，直接排程自動建立（不再需要「建立課程」按鈕）。
+  scheduleCourseAutosave();
   render();
 }
 
@@ -3281,6 +3340,7 @@ function loadDemo() {
   cancelCourseAutosave();
   const lesson = structuredClone(defaultLesson);
   lesson.slug = createUniqueCourseSlug(`${lesson.slug}-demo`);
+  lesson.name = createUniqueCourseName(lesson.name);
   setActiveLesson(lesson);
   state.courseEditor = freshCourseEditorState("new");
   state.chromeCollapsed = false;
@@ -3466,7 +3526,6 @@ function deleteWord(target) {
 }
 
 function clearWords() {
-  cancelCourseAutosave();
   state.lesson.words = [];
   state.game = freshGameState({
     teams: state.game.teams,
@@ -3478,6 +3537,7 @@ function clearWords() {
     imageMode: state.memory?.imageMode,
   });
   showToast("單字已清空");
+  scheduleCourseAutosave();
   render();
 }
 
@@ -3657,7 +3717,6 @@ document.addEventListener("click", (event) => {
   if (action === "copy-course-link") copySavedCourseLink(target);
   if (action === "verify-teacher-token") verifyTeacherWriteToken();
   if (action === "clear-teacher-token") clearTeacherTokenInput();
-  if (action === "save-course") saveCurrentCourse();
   if (action === "load-course") loadSavedCourse(target);
   if (action === "request-delete-course") requestDeleteSavedCourse(target);
   if (action === "cancel-delete-course") cancelDeleteSavedCourse();

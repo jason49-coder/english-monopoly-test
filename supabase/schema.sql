@@ -126,6 +126,39 @@ begin
     raise sqlstate '42501' using message = 'Teacher write token is invalid.';
   end if;
 
+  -- 課程身份只由 p_course_id 決定。名稱／網址代碼在此做伺服器端防護（前端也會預檢），
+  -- 確保任何情況都不會撞到別門課程：更新時不能改成別人的名稱或代碼，
+  -- 新增時不能與既有課程同名或同代碼（也就是絕不因為同名而變成覆蓋既有課程）。
+  if p_course_id is not null then
+    if exists (
+      select 1 from public.courses
+      where courses.id <> p_course_id
+        and lower(btrim(courses.name)) = lower(btrim(p_name))
+    ) then
+      raise exception using message = '課程名稱已被其他課程使用，請換一個名稱。';
+    end if;
+    if exists (
+      select 1 from public.courses
+      where courses.id <> p_course_id
+        and courses.slug = p_slug
+    ) then
+      raise exception using message = '課程網址代碼已被其他課程使用，請換一個代碼。';
+    end if;
+  else
+    if exists (
+      select 1 from public.courses
+      where lower(btrim(courses.name)) = lower(btrim(p_name))
+    ) then
+      raise exception using message = '課程名稱已存在，請換一個名稱或改為編輯既有課程。';
+    end if;
+    if exists (
+      select 1 from public.courses
+      where courses.slug = p_slug
+    ) then
+      raise exception using message = '課程網址代碼已存在，請換一個代碼或改為編輯既有課程。';
+    end if;
+  end if;
+
   if p_course_id is not null then
     update public.courses
     set
@@ -278,6 +311,24 @@ grant execute on function public.save_course_with_words(
   jsonb
 ) to anon, authenticated;
 
+-- 課程名稱全域唯一（忽略大小寫與前後空白），避免「新課程」「 新課程 」「新課程」大小寫差異被當成不同課程。
+-- 若既有資料已存在重複名稱，先跳過索引建立，讓上方 save_course_with_words 防覆蓋邏輯仍可先套用。
+-- 清理重複名稱後重跑 schema，本區塊會補上 courses_name_lower_key。
+do $$
+begin
+  if exists (
+    select 1
+    from public.courses
+    group by lower(btrim(name))
+    having count(*) > 1
+  ) then
+    raise notice 'Skipped courses_name_lower_key because duplicate course names exist. Rename duplicates and rerun schema.sql.';
+  else
+    execute 'create unique index if not exists courses_name_lower_key on public.courses (lower(btrim(name)))';
+  end if;
+end;
+$$;
+
 create or replace function public.export_course_backup()
 returns jsonb
 language plpgsql
@@ -326,6 +377,20 @@ using (
       and courses.is_published = true
   )
 );
+
+drop policy if exists "Teachers can read courses" on public.courses;
+create policy "Teachers can read courses"
+on public.courses
+for select
+to anon, authenticated
+using (public.teacher_write_allowed());
+
+drop policy if exists "Teachers can read words" on public.words;
+create policy "Teachers can read words"
+on public.words
+for select
+to anon, authenticated
+using (public.teacher_write_allowed());
 
 drop policy if exists "Teachers can insert courses" on public.courses;
 create policy "Teachers can insert courses"
@@ -392,3 +457,14 @@ for update
 to anon, authenticated
 using (public.teacher_write_allowed())
 with check (public.teacher_write_allowed());
+
+-- ---------------------------------------------------------------------------
+-- 套用前檢查：courses_name_lower_key（名稱全域唯一）需要既有資料無重複名稱。
+-- 若下方查詢有回傳列，schema 會先套用 RPC 防覆蓋邏輯並跳過唯一索引；
+-- 請手動合併／改名後重跑 schema.sql，補上 courses_name_lower_key：
+--
+--   select lower(btrim(name)) as name_key, count(*) as n, array_agg(id) as ids
+--   from public.courses
+--   group by lower(btrim(name))
+--   having count(*) > 1;
+-- ---------------------------------------------------------------------------

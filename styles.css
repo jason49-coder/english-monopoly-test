@@ -2050,6 +2050,15 @@ input[readonly] {
   box-shadow: 0 0 0 3px rgba(214, 48, 32, 0.14);
 }
 
+.course-sync-error {
+  margin: 6px 0 0;
+  color: #b42920;
+  font-size: 0.76rem;
+  font-weight: 700;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
 .course-create-button {
   flex: 0 0 auto;
   min-height: 34px;
