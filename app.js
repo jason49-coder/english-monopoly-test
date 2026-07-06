@@ -2869,7 +2869,9 @@ async function autosaveCurrentCourse() {
       courseAutosaveQueued = false;
       scheduleCourseAutosave();
     } else {
-      updateTeacherTokenFeedback();
+      // 重繪課程清單（不只同步列），讓排序按鈕在 saving 歸零後恢復可用；
+      // 先前只呼叫 updateTeacherTokenFeedback，清單仍停在同步中的 disabled 狀態。
+      refreshCourseLibraryPanel();
     }
   }
 }
