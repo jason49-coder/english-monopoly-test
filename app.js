@@ -7,6 +7,7 @@ const SUPABASE_PUBLIC_CONFIG = {
 };
 const SUPABASE_SCRIPT_SRC = "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2";
 const COURSE_AUTOSAVE_DELAY = 3200;
+const MOBILE_SYNC_TOAST_DELAY = 3600;
 const CLOUD_SYNC_MAX_ATTEMPTS = 8;
 const CLOUD_SYNC_RETRY_DELAY = 8000;
 
@@ -90,6 +91,7 @@ const boardTileText = {
 
 let state = loadState();
 let toastTimer = null;
+let syncToastTimer = null;
 let celebrationTimer = null;
 let memoryFeedbackTimer = null;
 let courseAutosaveTimer = null;
@@ -116,6 +118,14 @@ const courseDelete = {
 };
 const teacherUi = {
   expandedWordIndexes: new Set(),
+  syncToast: {
+    visible: false,
+    persistent: false,
+    className: "is-muted",
+    message: "",
+    detail: "",
+    key: "",
+  },
 };
 const animation = {
   rolling: false,
@@ -1609,6 +1619,7 @@ function renderTeacher() {
           </div>
         </div>
         ${renderTeacherSyncStatusBar()}
+        ${renderTeacherMobileSyncToast()}
         <div class="teacher-subhead">
           <div>
             <div class="section-kicker">基本資料</div>
@@ -1809,7 +1820,6 @@ function renderCourseLibrary() {
           <button class="ghost-button" type="button" data-action="start-new-course">＋ 新增課程</button>
         </div>
       </div>
-      ${renderCourseLibraryStatusRow()}
       ${courses.length ? `
         <div class="course-list">
           ${courses.map((course, index) => renderSavedCourse(course, index, courses.length)).join("")}
@@ -1819,29 +1829,19 @@ function renderCourseLibrary() {
   `;
 }
 
-function renderCourseLibraryStatusRow() {
-  return `
-    <div class="course-library-status-row">
-      <div class="course-library-sync">
-        ${renderCloudSyncBadge({ live: false })}
-      </div>
-      ${cloudSave.tokenStatus === "error" && cloudSave.tokenMessage
-        ? `<p class="course-sync-error">${escapeHtml(cloudSave.tokenMessage)}</p>`
-        : ""}
-    </div>
-  `;
-}
-
 function renderTeacherSyncStatusBar() {
   const status = getCloudSyncSummary();
   const completeCount = getLessonWords().length;
   const totalCount = Array.isArray(state.lesson.words) ? state.lesson.words.length : 0;
+  const countLabel = totalCount === completeCount
+    ? `${completeCount} 筆完整`
+    : `${completeCount}/${totalCount} 筆完整`;
 
   return `
     <div class="teacher-sync-bar ${status.className}">
       <div class="teacher-sync-main">
         ${renderCloudSyncBadge()}
-        <span class="teacher-sync-count">${completeCount}/${totalCount} 筆完整</span>
+        <span class="teacher-sync-count">${countLabel}</span>
       </div>
       ${cloudSave.tokenStatus === "error" && cloudSave.tokenMessage
         ? `<p class="teacher-sync-error" role="alert">${escapeHtml(cloudSave.tokenMessage)}</p>`
@@ -1850,22 +1850,97 @@ function renderTeacherSyncStatusBar() {
   `;
 }
 
-function refreshCourseLibraryStatusRow() {
-  const row = document.querySelector(".course-library-status-row");
-  if (row) row.outerHTML = renderCourseLibraryStatusRow();
-}
-
 function refreshTeacherSyncBar() {
   const bar = document.querySelector(".teacher-sync-bar");
   if (bar) bar.outerHTML = renderTeacherSyncStatusBar();
+  updateTeacherSyncToast();
 }
 
-function refreshSyncStatusSurfaces() {
-  refreshCourseLibraryStatusRow();
-  refreshTeacherSyncBar();
+function renderTeacherMobileSyncToast() {
+  const toast = teacherUi.syncToast || {};
+  if (!toast.visible || !toast.message) return "";
+
+  return `
+    <div class="teacher-sync-toast ${toast.className}" role="status" aria-live="polite">
+      <span class="teacher-sync-toast-message">${escapeHtml(toast.message)}</span>
+      ${toast.detail ? `<span class="teacher-sync-toast-detail">${escapeHtml(toast.detail)}</span>` : ""}
+    </div>
+  `;
 }
 
-// 只刷新課程清單與同步狀態，不動右側輸入欄位，
+function refreshTeacherSyncToast() {
+  const toast = document.querySelector(".teacher-sync-toast");
+  const nextMarkup = renderTeacherMobileSyncToast();
+  if (toast) {
+    if (nextMarkup) {
+      toast.outerHTML = nextMarkup;
+    } else {
+      toast.remove();
+    }
+    return;
+  }
+
+  if (!nextMarkup) return;
+  const panel = document.querySelector(".teacher-lesson-panel");
+  if (panel) panel.insertAdjacentHTML("afterbegin", nextMarkup);
+}
+
+function getTeacherSyncToastState() {
+  const shouldShow = cloudSave.verifying
+    || cloudSave.saving
+    || cloudSave.tokenStatus === "saved"
+    || cloudSave.tokenStatus === "error"
+    || cloudSave.tokenStatus === "invalid"
+    || courseAutosaveQueued
+    || Boolean(courseAutosaveTimer);
+
+  if (!shouldShow) return null;
+
+  const status = getCloudSyncSummary();
+  const compactStatus = getCompactCloudSyncSummary(status);
+  const completeCount = getLessonWords().length;
+  const persistent = cloudSave.verifying
+    || cloudSave.saving
+    || cloudSave.tokenStatus === "error"
+    || cloudSave.tokenStatus === "invalid";
+
+  return {
+    visible: true,
+    persistent,
+    className: status.className,
+    message: compactStatus.message,
+    detail: completeCount ? `${completeCount} 筆完整` : "",
+    key: `${status.className}|${compactStatus.message}|${cloudSave.tokenMessage}|${completeCount}`,
+  };
+}
+
+function updateTeacherSyncToast() {
+  if (state.view !== "teacher") return;
+
+  const nextToast = getTeacherSyncToastState();
+  clearTimeout(syncToastTimer);
+  syncToastTimer = null;
+
+  if (!nextToast) {
+    if (teacherUi.syncToast?.visible) {
+      teacherUi.syncToast = { ...teacherUi.syncToast, visible: false };
+      refreshTeacherSyncToast();
+    }
+    return;
+  }
+
+  teacherUi.syncToast = nextToast;
+  refreshTeacherSyncToast();
+
+  if (!nextToast.persistent) {
+    syncToastTimer = setTimeout(() => {
+      teacherUi.syncToast = { ...teacherUi.syncToast, visible: false };
+      refreshTeacherSyncToast();
+    }, MOBILE_SYNC_TOAST_DELAY);
+  }
+}
+
+// 只刷新課程清單與右側同步狀態，不動右側輸入欄位，
 // 讓存檔回饋與左欄課程資訊更新時，不打斷正在輸入的欄位（含注音選字）。
 function refreshCourseLibraryPanel() {
   const panel = document.querySelector(".course-library");
@@ -1875,11 +1950,34 @@ function refreshCourseLibraryPanel() {
 
 function renderCloudSyncBadge(options = {}) {
   const status = getCloudSyncSummary();
+  const compactStatus = getCompactCloudSyncSummary(status);
   const liveAttrs = options.live === false ? "" : ' role="status" aria-live="polite"';
 
   return `
-    <span class="cloud-sync-pill ${status.className}"${liveAttrs}>${escapeHtml(status.message)}</span>
+    <span class="cloud-sync-pill ${status.className}"${liveAttrs}>
+      <span class="sync-message-full">${escapeHtml(status.message)}</span>
+      <span class="sync-message-compact">${escapeHtml(compactStatus.message)}</span>
+    </span>
   `;
+}
+
+function getCompactCloudSyncSummary(status) {
+  if (cloudSave.verifying) return { ...status, message: "驗證中" };
+  if (cloudSave.saving) {
+    return { ...status, message: cloudSave.operation === "course-order" ? "排序同步中" : "同步中" };
+  }
+  if (!getTeacherWriteToken()) return { ...status, message: "未登入" };
+  if (cloudSave.tokenStatus === "invalid") return { ...status, message: "需重登" };
+  if (cloudSave.tokenStatus === "error") return { ...status, message: "同步失敗" };
+  if (courseAutosaveQueued || courseAutosaveTimer) return { ...status, message: "已排程" };
+  if (cloudSave.tokenStatus === "saved") {
+    return {
+      ...status,
+      message: String(cloudSave.tokenMessage || "").includes("排序") ? "排序已同步" : "已同步",
+    };
+  }
+  if (!isEditingExistingCourse()) return { ...status, message: getLessonWords().length ? "待建立" : "補單字" };
+  return { ...status, message: "同步啟用" };
 }
 
 function getCloudSyncSummary() {
@@ -3064,7 +3162,7 @@ function updateTeacherTokenFeedback() {
     statusElement.textContent = status.message;
   }
 
-  refreshSyncStatusSurfaces();
+  refreshTeacherSyncBar();
 
   const hasToken = Boolean(getTeacherWriteToken());
   const disabled = cloudSave.saving || cloudSave.verifying;

@@ -1862,6 +1862,10 @@ select:focus {
   white-space: normal;
 }
 
+.sync-message-compact {
+  display: none;
+}
+
 .teacher-sync-count {
   flex: 0 0 auto;
   padding: 3px 8px;
@@ -1882,6 +1886,10 @@ select:focus {
   font-weight: 750;
   line-height: 1.45;
   overflow-wrap: anywhere;
+}
+
+.teacher-sync-toast {
+  display: none;
 }
 
 .teacher-subhead {
@@ -2051,20 +2059,6 @@ input[readonly] {
   white-space: nowrap;
 }
 
-.course-library-status-row {
-  padding: 8px 10px;
-  border: 1px solid rgba(19, 139, 132, 0.12);
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.58);
-}
-
-.course-library-sync {
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  gap: 8px;
-}
-
 .cloud-sync-pill {
   display: inline-flex;
   flex: 1 1 auto;
@@ -2106,15 +2100,6 @@ input[readonly] {
 .cloud-sync-pill.is-error::before {
   background: #d63020;
   box-shadow: 0 0 0 3px rgba(214, 48, 32, 0.14);
-}
-
-.course-sync-error {
-  margin: 6px 0 0;
-  color: #b42920;
-  font-size: 0.76rem;
-  font-weight: 700;
-  line-height: 1.4;
-  overflow-wrap: anywhere;
 }
 
 .course-create-button {
@@ -2505,6 +2490,17 @@ input[readonly] {
   }
 }
 
+@keyframes syncToastIn {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 @keyframes scoreFlash {
   0% {
     box-shadow: 0 0 0 0 color-mix(in srgb, var(--team-color) 0%, transparent);
@@ -2705,7 +2701,12 @@ input[readonly] {
   }
 
   .teacher-sync-bar {
-    top: 8px;
+    position: static;
+    z-index: auto;
+    gap: 4px;
+    padding: 7px 9px;
+    box-shadow: none;
+    backdrop-filter: none;
   }
 
   .setup-grid {
@@ -2836,11 +2837,108 @@ input[readonly] {
   }
 
   .teacher-sync-bar {
-    padding: 9px 10px;
+    padding: 7px 9px;
   }
 
   .teacher-sync-main {
+    flex-wrap: nowrap;
     gap: 7px;
+  }
+
+  .teacher-sync-bar .cloud-sync-pill {
+    flex: 1 1 auto;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .sync-message-full {
+    display: none;
+  }
+
+  .sync-message-compact {
+    display: inline;
+  }
+
+  .teacher-sync-count {
+    padding: 2px 7px;
+    font-size: 0.72rem;
+  }
+
+  .teacher-sync-error {
+    font-size: 0.74rem;
+    line-height: 1.35;
+  }
+
+  .teacher-sync-toast {
+    position: fixed;
+    top: calc(env(safe-area-inset-top, 0px) + 10px);
+    right: 12px;
+    left: 12px;
+    z-index: 45;
+    display: flex;
+    width: min(calc(100vw - 24px), 420px);
+    min-height: 38px;
+    margin: 0 auto;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 8px 11px;
+    border: 1px solid rgba(19, 139, 132, 0.22);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.96);
+    color: #0f766e;
+    font-size: 0.82rem;
+    font-weight: 950;
+    line-height: 1.25;
+    pointer-events: none;
+    box-shadow: 0 12px 30px rgba(24, 34, 45, 0.18);
+    animation: syncToastIn 180ms ease-out both;
+  }
+
+  .teacher-sync-toast::before {
+    content: "";
+    flex: 0 0 auto;
+    width: 8px;
+    height: 8px;
+    border-radius: 999px;
+    background: #13a36d;
+    box-shadow: 0 0 0 3px rgba(19, 163, 109, 0.14);
+  }
+
+  .teacher-sync-toast.is-muted {
+    color: #475569;
+  }
+
+  .teacher-sync-toast.is-muted::before {
+    background: #94a3b8;
+    box-shadow: 0 0 0 3px rgba(148, 163, 184, 0.16);
+  }
+
+  .teacher-sync-toast.is-error {
+    border-color: rgba(214, 48, 32, 0.24);
+    background: rgba(255, 247, 246, 0.98);
+    color: #b42920;
+  }
+
+  .teacher-sync-toast.is-error::before {
+    background: #d63020;
+    box-shadow: 0 0 0 3px rgba(214, 48, 32, 0.14);
+  }
+
+  .teacher-sync-toast-message,
+  .teacher-sync-toast-detail {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .teacher-sync-toast-detail {
+    flex: 0 0 auto;
+    color: var(--muted);
+    font-size: 0.74rem;
+    font-weight: 900;
   }
 
   .hub-hero {
@@ -3059,11 +3157,6 @@ input[readonly] {
 
   .course-library-actions button {
     width: 100%;
-  }
-
-  .course-library-sync {
-    align-items: stretch;
-    flex-direction: column;
   }
 
   .cloud-sync-pill {
