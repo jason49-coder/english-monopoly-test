@@ -1703,7 +1703,7 @@ function renderTeacherAuthGate() {
       `
     : `
         <div class="cloud-token-row teacher-auth-row">
-          <input id="teacherWriteToken" type="password" data-action="teacher-token-input" placeholder="輸入老師寫入密碼" autocomplete="current-password" ${verifying ? "disabled" : ""} autofocus />
+          <input id="teacherWriteToken" type="password" data-action="teacher-token-input" placeholder="輸入老師寫入密碼" autocomplete="current-password" ${verifying ? "disabled" : ""} />
           <button class="primary-button" type="button" data-action="verify-teacher-token" ${verifying ? "disabled" : "disabled"}>${verifying ? "驗證中" : "進入後台"}</button>
         </div>
       `;
@@ -4128,6 +4128,17 @@ document.addEventListener("keydown", (event) => {
   }
 });
 
+// 觸控裝置上，虛擬鍵盤彈出時會遮住輸入欄位下方的按鈕；聚焦後把欄位捲到畫面中央。
+const coarsePointer = window.matchMedia("(pointer: coarse)");
+document.addEventListener("focusin", (event) => {
+  if (!coarsePointer.matches) return;
+  const el = event.target;
+  if (!(el instanceof HTMLElement) || !el.matches("input, textarea, select")) return;
+  const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  setTimeout(() => {
+    el.scrollIntoView({ block: "center", behavior: reduceMotion ? "auto" : "smooth" });
+  }, 300);
+});
 
 window.addEventListener("resize", () => {
   requestAnimationFrame(syncGameViewport);

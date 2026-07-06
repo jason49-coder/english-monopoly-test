@@ -1753,6 +1753,7 @@ select:focus {
 .teacher-auth-layout {
   display: grid;
   min-height: min(560px, calc(100vh - 150px));
+  min-height: min(560px, calc(100dvh - 150px));
   align-items: center;
   justify-items: center;
   padding: clamp(28px, 5vh, 56px) 0 24px;
