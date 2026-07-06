@@ -235,7 +235,7 @@ begin
       coalesce(p_tags, '{}'::text[]),
       coalesce(p_enabled_tasks, array['say', 'sentence', 'spell', 'ask', 'act', 'choose']::text[]),
       coalesce(p_is_published, true),
-      coalesce(p_sort_order, coalesce((select min(sort_order) from public.courses), 100) - 100)
+      coalesce(p_sort_order, coalesce((select min(c.sort_order) from public.courses as c), 100) - 100)
     )
     returning * into saved_course;
   end if;

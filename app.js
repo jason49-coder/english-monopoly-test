@@ -7,7 +7,6 @@ const SUPABASE_PUBLIC_CONFIG = {
 };
 const SUPABASE_SCRIPT_SRC = "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2";
 const COURSE_AUTOSAVE_DELAY = 3200;
-const MOBILE_SYNC_TOAST_DELAY = 3600;
 const CLOUD_SYNC_MAX_ATTEMPTS = 8;
 const CLOUD_SYNC_RETRY_DELAY = 8000;
 
@@ -91,7 +90,6 @@ const boardTileText = {
 
 let state = loadState();
 let toastTimer = null;
-let syncToastTimer = null;
 let celebrationTimer = null;
 let memoryFeedbackTimer = null;
 let courseAutosaveTimer = null;
@@ -118,14 +116,6 @@ const courseDelete = {
 };
 const teacherUi = {
   expandedWordIndexes: new Set(),
-  syncToast: {
-    visible: false,
-    persistent: false,
-    className: "is-muted",
-    message: "",
-    detail: "",
-    key: "",
-  },
 };
 const animation = {
   rolling: false,
@@ -1040,9 +1030,10 @@ function renderTopbar() {
   const actions = state.view === "teacher" ? renderTeacherTopbarActions(busy) : renderGameTopbarActions(busy);
   const gameCompact = state.view === "game" && isActiveGameStarted();
   const teacherLocked = state.view === "teacher" && !isTeacherUnlocked();
+  const teacherTokenRemembered = teacherLocked && Boolean(getTeacherWriteToken());
   const title = teacherLocked ? "老師後台" : state.lesson.name || "兒童美語大富翁";
   const meta = teacherLocked
-    ? "請先輸入寫入密碼"
+    ? (teacherTokenRemembered ? "已記住密碼，可直接進入" : "請輸入老師密碼")
     : `${getLessonWords().length} words · ${state.game.teams.length} teams · Round ${state.game.round}`;
 
   return `
@@ -1619,7 +1610,6 @@ function renderTeacher() {
           </div>
         </div>
         ${renderTeacherSyncStatusBar()}
-        ${renderTeacherMobileSyncToast()}
         <div class="teacher-subhead">
           <div>
             <div class="section-kicker">基本資料</div>
@@ -1689,20 +1679,46 @@ function renderTeacherAuthGate() {
   const token = getTeacherWriteToken();
   const verifying = cloudSave.verifying;
   const status = getTeacherWriteTokenStatus();
-  const placeholder = token ? "本分頁已記住密碼" : "輸入老師寫入密碼";
+  const authMode = token ? "is-remembered" : "is-password";
+  const showStatus = !token
+    || verifying
+    || cloudSave.tokenStatus === "pending"
+    || cloudSave.tokenStatus === "invalid"
+    || cloudSave.tokenStatus === "error";
+  const authControl = token
+    ? `
+        <div class="teacher-auth-state">
+          <div class="teacher-auth-remembered" role="status">
+            <span class="teacher-auth-status-dot" aria-hidden="true"></span>
+            <div>
+              <strong>本分頁已記住密碼</strong>
+              <span>進入前會重新確認權限。</span>
+            </div>
+          </div>
+          <div class="teacher-auth-actions">
+            <button class="primary-button" type="button" data-action="verify-teacher-token" ${verifying ? "disabled" : ""}>${verifying ? "進入中" : "直接進入後台"}</button>
+            <button class="plain-button" type="button" data-action="clear-teacher-token" ${verifying ? "disabled" : ""}>重新輸入密碼</button>
+          </div>
+        </div>
+      `
+    : `
+        <div class="cloud-token-row teacher-auth-row">
+          <input id="teacherWriteToken" type="password" data-action="teacher-token-input" placeholder="輸入老師寫入密碼" autocomplete="current-password" ${verifying ? "disabled" : ""} autofocus />
+          <button class="primary-button" type="button" data-action="verify-teacher-token" ${verifying ? "disabled" : "disabled"}>${verifying ? "驗證中" : "進入後台"}</button>
+        </div>
+      `;
 
   return `
-    <section class="teacher-auth-layout">
-      <div class="teacher-auth-panel">
-        <div class="section-kicker">老師後台</div>
-        <h2>輸入密碼進入</h2>
-        <p>後台課程只會讀寫 Supabase 雲端資料。密碼通過後才能編輯、刪除或同步課程。</p>
-        <div class="cloud-token-row teacher-auth-row">
-          <input id="teacherWriteToken" type="password" data-action="teacher-token-input" placeholder="${escapeAttr(placeholder)}" autocomplete="current-password" ${verifying ? "disabled" : ""} autofocus />
-          <button class="primary-button" type="button" data-action="verify-teacher-token" ${verifying || !token ? "disabled" : ""}>${verifying ? "驗證中" : "進入後台"}</button>
+    <section class="teacher-auth-layout ${authMode}">
+      <div class="teacher-auth-panel ${authMode}">
+        <div class="teacher-auth-copy">
+          <div class="section-kicker">${token ? "登入狀態" : "老師後台"}</div>
+          <h2>${token ? "可以直接進入後台" : "輸入密碼進入"}</h2>
+          <p>${token ? "這個分頁已保存老師密碼，不需要重新輸入。按下進入時，系統會先確認密碼仍然有效。" : "後台課程只會讀寫 Supabase 雲端資料。密碼通過後才能編輯、刪除或同步課程。"}</p>
         </div>
-        <div class="teacher-auth-footer">
-          <span class="cloud-token-status ${status.className}" role="status" aria-live="polite">${escapeHtml(status.message)}</span>
+        ${authControl}
+        <div class="teacher-auth-footer ${showStatus ? "" : "is-action-only"}">
+          ${showStatus ? `<span class="cloud-token-status ${status.className}" role="status" aria-live="polite">${escapeHtml(status.message)}</span>` : ""}
           <button class="plain-button" type="button" data-action="go-game-url">回遊戲入口</button>
         </div>
       </div>
@@ -1853,10 +1869,10 @@ function renderTeacherSyncStatusBar() {
 function refreshTeacherSyncBar() {
   const bar = document.querySelector(".teacher-sync-bar");
   if (bar) bar.outerHTML = renderTeacherSyncStatusBar();
-  updateTeacherSyncToast();
 }
 
 function renderTeacherMobileSyncToast() {
+  return "";
   const toast = teacherUi.syncToast || {};
   if (!toast.visible || !toast.message) return "";
 
@@ -1869,23 +1885,22 @@ function renderTeacherMobileSyncToast() {
 }
 
 function refreshTeacherSyncToast() {
-  const toast = document.querySelector(".teacher-sync-toast");
+  return;
   const nextMarkup = renderTeacherMobileSyncToast();
-  if (toast) {
-    if (nextMarkup) {
-      toast.outerHTML = nextMarkup;
-    } else {
-      toast.remove();
-    }
+  document.querySelectorAll(".teacher-sync-toast").forEach((toast) => toast.remove());
+
+  if (!nextMarkup) return;
+  const bar = document.querySelector(".teacher-sync-bar");
+  if (bar) {
+    bar.insertAdjacentHTML("afterend", nextMarkup);
     return;
   }
 
-  if (!nextMarkup) return;
-  const panel = document.querySelector(".teacher-lesson-panel");
-  if (panel) panel.insertAdjacentHTML("afterbegin", nextMarkup);
+  document.querySelector(".teacher-lesson-panel")?.insertAdjacentHTML("afterbegin", nextMarkup);
 }
 
 function getTeacherSyncToastState() {
+  return null;
   const shouldShow = cloudSave.verifying
     || cloudSave.saving
     || cloudSave.tokenStatus === "saved"
@@ -1915,6 +1930,7 @@ function getTeacherSyncToastState() {
 }
 
 function updateTeacherSyncToast() {
+  return;
   if (state.view !== "teacher") return;
 
   const nextToast = getTeacherSyncToastState();
@@ -2060,7 +2076,7 @@ function getTeacherWriteTokenStatus() {
     return { className: "is-muted", message: cloudSave.tokenMessage || "尚未完成登入，請重新進入後台。" };
   }
 
-  return { className: "is-muted", message: "本分頁已記住密碼，可以同步 Supabase。" };
+  return { className: "is-muted", message: "本分頁已記住密碼，可以直接進入後台。" };
 }
 
 function renderSavedCourse(course, index = 0, courseCount = 1) {

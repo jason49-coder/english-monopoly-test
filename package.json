@@ -1,0 +1,12 @@
+{
+  "name": "english-monopoly",
+  "version": "1.0.0",
+  "private": true,
+  "type": "commonjs",
+  "scripts": {
+    "check:js": "node --check app.js"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.61.1"
+  }
+}
