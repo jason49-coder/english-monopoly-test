@@ -4128,16 +4128,34 @@ document.addEventListener("keydown", (event) => {
   }
 });
 
-// 觸控裝置上，虛擬鍵盤彈出時會遮住輸入欄位下方的按鈕；聚焦後把欄位捲到畫面中央。
+// 觸控裝置上，虛擬鍵盤彈出會遮住輸入欄位。用 visualViewport 事件驅動（而非固定延遲），
+// 而且只在欄位「確實被鍵盤蓋住」時才捲動，避免與 iOS Safari 內建的捲動互相打架而時好時壞。
 const coarsePointer = window.matchMedia("(pointer: coarse)");
-document.addEventListener("focusin", (event) => {
+const viewport = window.visualViewport;
+
+function revealFocusedField() {
   if (!coarsePointer.matches) return;
+  const el = document.activeElement;
+  if (!(el instanceof HTMLElement) || !el.matches("input, textarea, select")) return;
+  const rect = el.getBoundingClientRect();
+  const margin = 16;
+  const visibleTop = (viewport ? viewport.offsetTop : 0) + margin;
+  const visibleBottom = (viewport ? viewport.offsetTop + viewport.height : window.innerHeight) - margin;
+  // 欄位已完整落在鍵盤上方的可見區內就別動它，交給瀏覽器自己處理。
+  if (rect.top >= visibleTop && rect.bottom <= visibleBottom) return;
+  const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  el.scrollIntoView({ block: "center", behavior: reduceMotion ? "auto" : "smooth" });
+}
+
+if (viewport) {
+  // 鍵盤開合會讓 visualViewport 的高度改變並觸發 resize，此時視窗已穩定，捲動位置才會準。
+  viewport.addEventListener("resize", revealFocusedField);
+}
+document.addEventListener("focusin", (event) => {
   const el = event.target;
   if (!(el instanceof HTMLElement) || !el.matches("input, textarea, select")) return;
-  const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  setTimeout(() => {
-    el.scrollIntoView({ block: "center", behavior: reduceMotion ? "auto" : "smooth" });
-  }, 300);
+  // 鍵盤已經開著時切換欄位不會觸發 resize，仍需檢查一次；延遲讓 iOS 先跑完自己的捲動。
+  setTimeout(revealFocusedField, 350);
 });
 
 window.addEventListener("resize", () => {
