@@ -2798,11 +2798,13 @@ function scheduleCourseAutosave() {
 
   cloudSave.tokenStatus = cloudSave.tokenStatus === "saved" ? "saved" : "verified";
   cloudSave.tokenMessage = "已排程自動同步 Supabase。";
-  updateTeacherTokenFeedback();
-
+  // 先排定 timer 再刷新狀態列，否則刷新當下 timer 仍為 null，
+  // 同步列會誤顯示成「已同步」，讓編輯後看不到「未同步」的即時回饋。
   courseAutosaveTimer = setTimeout(() => {
     autosaveCurrentCourse();
   }, COURSE_AUTOSAVE_DELAY);
+
+  updateTeacherTokenFeedback();
 }
 
 async function autosaveCurrentCourse() {
