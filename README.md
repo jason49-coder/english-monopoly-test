@@ -34,14 +34,15 @@
 
 ## Supabase 維護
 
-`.github/workflows/supabase-maintenance.yml` 每天會做兩件事：
+`.github/workflows/supabase-maintenance.yml` 會做三件事：
 
-1. 寫入 `maintenance_heartbeat`，讓資料庫產生定期活動。
-2. 呼叫 `export_course_backup` RPC，匯出 `courses` / `words` JSON artifact，保留 30 天。
+1. 每 6 小時寫入 `maintenance_heartbeat`，讓資料庫產生分散的定期活動。
+2. 每天呼叫 `export_course_backup` RPC，匯出 `courses` / `words` JSON artifact，保留 90 天。
+3. heartbeat 或備份失敗時建立 GitHub Issue；恢復後自動關閉。
 
 GitHub repository 需要設定這個 Actions secret：
 
-- `TEACHER_WRITE_TOKEN`
+- `MAINTENANCE_TOKEN`：獨立的高強度維護密碼，不與老師登入密碼共用。
 
 `SUPABASE_URL` 和 `SUPABASE_ANON_KEY` 會使用前端公開設定作為 fallback；如果之後換 Supabase 專案，也可以在 GitHub Actions secrets 裡新增同名值覆蓋。
 
@@ -52,3 +53,11 @@ GitHub repository 需要設定這個 Actions secret：
 1. 更新本機 `.env` 的 `TEACHER_WRITE_TOKEN`。
 2. 將新 token 的 SHA-256 hash 更新到 `supabase/schema.sql` 的 `public.teacher_write_allowed()`。
 3. 在 Supabase SQL Editor 重新執行 teacher write policy 區塊。
+
+若要更換維護密碼：
+
+1. 產生至少 32 bytes 的隨機 token。
+2. 將 token 的 SHA-256 hash 更新到 `supabase/schema.sql` 的 `public.maintenance_write_allowed()`。
+3. 在 Supabase SQL Editor 更新 `public.maintenance_write_allowed()`。
+4. 將同一個原始 token 更新到 GitHub Actions secret `MAINTENANCE_TOKEN`。
+5. 手動執行 `Supabase Maintenance`，確認 heartbeat、backup 與 artifact 全部成功。

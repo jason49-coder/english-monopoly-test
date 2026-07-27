@@ -2,6 +2,7 @@
 .claude/
 node_modules/
 .npm-cache/
+backup/
 *.zip
 .env
 .env.*

@@ -52,6 +52,7 @@ create index if not exists words_course_en_idx on public.words (course_id, en);
 create or replace function public.set_updated_at()
 returns trigger
 language plpgsql
+set search_path = ''
 as $$
 begin
   if tg_table_schema = 'public' and tg_table_name = 'courses' then
@@ -121,6 +122,7 @@ create or replace function public.teacher_write_allowed()
 returns boolean
 language sql
 stable
+set search_path = ''
 as $$
   select encode(
     extensions.digest(
@@ -135,6 +137,27 @@ as $$
 $$;
 
 grant execute on function public.teacher_write_allowed() to anon, authenticated;
+
+create or replace function public.maintenance_write_allowed()
+returns boolean
+language sql
+stable
+set search_path = ''
+as $$
+  select encode(
+    extensions.digest(
+      coalesce(
+        nullif(current_setting('request.headers', true), '')::jsonb ->> 'x-maintenance-token',
+        ''
+      ),
+      'sha256'
+    ),
+    'hex'
+  ) = 'd312e550e2a77ef2378a8ae6d36776f60e5f52cc41ae3b2b55dfa9ac16155234';
+$$;
+
+revoke all on function public.maintenance_write_allowed() from public;
+grant execute on function public.maintenance_write_allowed() to anon, authenticated;
 
 drop function if exists public.save_course_with_words(
   uuid,
@@ -451,12 +474,12 @@ $$;
 create or replace function public.export_course_backup()
 returns jsonb
 language plpgsql
-security definer
+security invoker
 set search_path = public
 as $$
 begin
-  if not public.teacher_write_allowed() then
-    raise sqlstate '42501' using message = 'Teacher write token is invalid.';
+  if not (public.teacher_write_allowed() or public.maintenance_write_allowed()) then
+    raise sqlstate '42501' using message = 'Backup token is invalid.';
   end if;
 
   return jsonb_build_object(
@@ -502,14 +525,14 @@ create policy "Teachers can read courses"
 on public.courses
 for select
 to anon, authenticated
-using (public.teacher_write_allowed());
+using (public.teacher_write_allowed() or public.maintenance_write_allowed());
 
 drop policy if exists "Teachers can read words" on public.words;
 create policy "Teachers can read words"
 on public.words
 for select
 to anon, authenticated
-using (public.teacher_write_allowed());
+using (public.teacher_write_allowed() or public.maintenance_write_allowed());
 
 drop policy if exists "Teachers can insert courses" on public.courses;
 create policy "Teachers can insert courses"
@@ -560,22 +583,22 @@ create policy "Teachers can read maintenance heartbeat"
 on public.maintenance_heartbeat
 for select
 to anon, authenticated
-using (public.teacher_write_allowed());
+using (public.teacher_write_allowed() or public.maintenance_write_allowed());
 
 drop policy if exists "Teachers can insert maintenance heartbeat" on public.maintenance_heartbeat;
 create policy "Teachers can insert maintenance heartbeat"
 on public.maintenance_heartbeat
 for insert
 to anon, authenticated
-with check (public.teacher_write_allowed());
+with check (public.teacher_write_allowed() or public.maintenance_write_allowed());
 
 drop policy if exists "Teachers can update maintenance heartbeat" on public.maintenance_heartbeat;
 create policy "Teachers can update maintenance heartbeat"
 on public.maintenance_heartbeat
 for update
 to anon, authenticated
-using (public.teacher_write_allowed())
-with check (public.teacher_write_allowed());
+using (public.teacher_write_allowed() or public.maintenance_write_allowed())
+with check (public.teacher_write_allowed() or public.maintenance_write_allowed());
 
 -- ---------------------------------------------------------------------------
 -- 套用前檢查：courses_name_lower_key（名稱全域唯一）需要既有資料無重複名稱。
