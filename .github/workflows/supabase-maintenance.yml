@@ -1,30 +1,38 @@
 name: Supabase Maintenance
 
 on:
+  pull_request:
+    paths:
+      - ".github/workflows/supabase-maintenance.yml"
+      - "supabase/schema.sql"
   schedule:
-    # Runs daily at 04:17 Asia/Taipei.
+    # Daily heartbeat + backup at 04:17 Asia/Taipei.
     - cron: "17 20 * * *"
+    # Additional heartbeats at 10:43, 16:43, and 22:43 Asia/Taipei.
+    - cron: "43 2,8,14 * * *"
   workflow_dispatch:
 
 permissions:
   contents: read
+  issues: write
 
 env:
   SUPABASE_URL: ${{ secrets.SUPABASE_URL || 'https://ybbttuzmwfxwigllfxda.supabase.co' }}
   SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InliYnR0dXptd2Z4d2lnbGxmeGRhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA1ODgwMzQsImV4cCI6MjA5NjE2NDAzNH0.WtcBOa22ZecFStci2uo7hG1bk0mU6YEbiqAsMtzOyiA' }}
-  TEACHER_WRITE_TOKEN: ${{ secrets.TEACHER_WRITE_TOKEN }}
+  MAINTENANCE_TOKEN: ${{ secrets.MAINTENANCE_TOKEN }}
 
 jobs:
   heartbeat:
     name: Touch heartbeat
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - name: Check required secrets
         shell: bash
         run: |
-          if [ -z "${TEACHER_WRITE_TOKEN}" ]; then
-            echo "::error::TEACHER_WRITE_TOKEN is not configured"
+          if [ -z "${MAINTENANCE_TOKEN}" ]; then
+            echo "::error::MAINTENANCE_TOKEN is not configured"
             exit 1
           fi
 
@@ -35,27 +43,48 @@ jobs:
 
           checked_at="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
           body="{\"id\":\"github-actions\",\"checked_at\":\"${checked_at}\",\"source\":\"github-actions\"}"
+          response_file="$(mktemp)"
+          trap 'rm -f "${response_file}"' EXIT
 
-          curl --fail-with-body --silent --show-error \
-            --retry 3 --retry-delay 10 --retry-all-errors \
-            -X POST "${SUPABASE_URL%/}/rest/v1/maintenance_heartbeat?on_conflict=id" \
-            -H "apikey: ${SUPABASE_ANON_KEY}" \
-            -H "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
-            -H "x-teacher-token: ${TEACHER_WRITE_TOKEN}" \
-            -H "Content-Type: application/json" \
-            -H "Prefer: resolution=merge-duplicates,return=minimal" \
-            --data "${body}"
+          if ! curl --fail-with-body --silent --show-error \
+              --retry 3 --retry-delay 5 --retry-connrefused \
+              -X POST "${SUPABASE_URL%/}/rest/v1/maintenance_heartbeat?on_conflict=id" \
+              -H "apikey: ${SUPABASE_ANON_KEY}" \
+              -H "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
+              -H "x-maintenance-token: ${MAINTENANCE_TOKEN}" \
+              -H "Content-Type: application/json" \
+              -H "Prefer: resolution=merge-duplicates,return=representation" \
+              --data "${body}" \
+              -o "${response_file}"; then
+            if [ -s "${response_file}" ]; then
+              cat "${response_file}" >&2
+            fi
+            exit 1
+          fi
+
+          node - "${response_file}" <<'NODE'
+          const fs = require("fs");
+          const response = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
+          if (!Array.isArray(response) || response.length !== 1 || response[0].id !== "github-actions") {
+            throw new Error("Heartbeat response was not verified.");
+          }
+          console.log(`Heartbeat verified at ${response[0].checked_at}.`);
+          NODE
 
   backup:
     name: Export course backup
+    if: >-
+      (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) ||
+      github.event_name == 'workflow_dispatch' ||
+      github.event.schedule == '17 20 * * *'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - name: Check required secrets
         shell: bash
         run: |
-          if [ -z "${TEACHER_WRITE_TOKEN}" ]; then
-            echo "::error::TEACHER_WRITE_TOKEN is not configured"
+          if [ -z "${MAINTENANCE_TOKEN}" ]; then
+            echo "::error::MAINTENANCE_TOKEN is not configured"
             exit 1
           fi
 
@@ -65,15 +94,20 @@ jobs:
           set -euo pipefail
 
           mkdir -p backup
-          curl --fail-with-body --silent --show-error \
-            --retry 3 --retry-delay 10 --retry-all-errors \
-            -X POST "${SUPABASE_URL%/}/rest/v1/rpc/export_course_backup" \
-            -H "apikey: ${SUPABASE_ANON_KEY}" \
-            -H "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
-            -H "x-teacher-token: ${TEACHER_WRITE_TOKEN}" \
-            -H "Content-Type: application/json" \
-            --data "{}" \
-            -o backup/supabase-course-backup.json
+          if ! curl --fail-with-body --silent --show-error \
+              --retry 3 --retry-delay 5 --retry-connrefused \
+              -X POST "${SUPABASE_URL%/}/rest/v1/rpc/export_course_backup" \
+              -H "apikey: ${SUPABASE_ANON_KEY}" \
+              -H "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
+              -H "x-maintenance-token: ${MAINTENANCE_TOKEN}" \
+              -H "Content-Type: application/json" \
+              --data "{}" \
+              -o backup/supabase-course-backup.json; then
+            if [ -s backup/supabase-course-backup.json ]; then
+              cat backup/supabase-course-backup.json >&2
+            fi
+            exit 1
+          fi
 
           node <<'NODE'
           const fs = require("fs");
@@ -90,4 +124,70 @@ jobs:
         with:
           name: supabase-course-backup
           path: backup/supabase-course-backup.json
-          retention-days: 30
+          retention-days: 90
+
+  maintenance-status:
+    name: Update maintenance alert
+    needs:
+      - heartbeat
+      - backup
+    if: >-
+      always() &&
+      (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Open or resolve the maintenance alert
+        uses: actions/github-script@v7
+        env:
+          HEARTBEAT_RESULT: ${{ needs.heartbeat.result }}
+          BACKUP_RESULT: ${{ needs.backup.result }}
+        with:
+          script: |
+            const title = "[Alert] Supabase maintenance failed";
+            const heartbeat = process.env.HEARTBEAT_RESULT;
+            const backup = process.env.BACKUP_RESULT;
+            const failed = heartbeat !== "success" || !["success", "skipped"].includes(backup);
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const { data: issues } = await github.rest.issues.listForRepo({
+              ...context.repo,
+              state: "open",
+              per_page: 100,
+            });
+            const existing = issues.find((issue) => !issue.pull_request && issue.title === title);
+
+            if (failed) {
+              const body = [
+                `Supabase maintenance failed on ${new Date().toISOString()}.`,
+                "",
+                `- Heartbeat: \`${heartbeat}\``,
+                `- Backup: \`${backup}\``,
+                `- Run: ${runUrl}`,
+                "",
+                "Check the Supabase project status and GitHub Actions secrets immediately.",
+              ].join("\n");
+
+              if (existing) {
+                await github.rest.issues.createComment({
+                  ...context.repo,
+                  issue_number: existing.number,
+                  body,
+                });
+              } else {
+                await github.rest.issues.create({
+                  ...context.repo,
+                  title,
+                  body,
+                });
+              }
+            } else if (existing) {
+              await github.rest.issues.createComment({
+                ...context.repo,
+                issue_number: existing.number,
+                body: `Supabase maintenance recovered successfully: ${runUrl}`,
+              });
+              await github.rest.issues.update({
+                ...context.repo,
+                issue_number: existing.number,
+                state: "closed",
+              });
+            }
