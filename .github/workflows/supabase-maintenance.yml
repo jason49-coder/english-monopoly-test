@@ -1,6 +1,10 @@
 name: Supabase Maintenance
 
 on:
+  pull_request:
+    paths:
+      - ".github/workflows/supabase-maintenance.yml"
+      - "supabase/schema.sql"
   schedule:
     # Daily heartbeat + backup at 04:17 Asia/Taipei.
     - cron: "17 20 * * *"
@@ -20,6 +24,7 @@ env:
 jobs:
   heartbeat:
     name: Touch heartbeat
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -68,7 +73,10 @@ jobs:
 
   backup:
     name: Export course backup
-    if: github.event_name == 'workflow_dispatch' || github.event.schedule == '17 20 * * *'
+    if: >-
+      (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) ||
+      github.event_name == 'workflow_dispatch' ||
+      github.event.schedule == '17 20 * * *'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -123,7 +131,9 @@ jobs:
     needs:
       - heartbeat
       - backup
-    if: always()
+    if: >-
+      always() &&
+      (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: ubuntu-latest
     steps:
       - name: Open or resolve the maintenance alert

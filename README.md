@@ -39,6 +39,7 @@
 1. 每 6 小時寫入 `maintenance_heartbeat`，讓資料庫產生分散的定期活動。
 2. 每天呼叫 `export_course_backup` RPC，匯出 `courses` / `words` JSON artifact，保留 90 天。
 3. heartbeat 或備份失敗時建立 GitHub Issue；恢復後自動關閉。
+4. 修改維護 workflow 或 Supabase schema 的同儲存庫 PR 會自動執行 heartbeat 與備份驗證。
 
 GitHub repository 需要設定這個 Actions secret：
 
