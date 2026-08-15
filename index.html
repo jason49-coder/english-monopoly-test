@@ -6,6 +6,65 @@
     <title>兒童美語大富翁</title>
     <link rel="stylesheet" href="styles.css?v=20260706-22" />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/animate.css@4/animate.min.css" />
+    <style>
+      html.course-route-loading #app {
+        visibility: hidden;
+      }
+
+      html.course-route-loading body::before {
+        content: "課程載入中…";
+        position: fixed;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        font: 700 1rem/1.5 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        color: #475569;
+        background: #f8fafc;
+        z-index: 9999;
+      }
+    </style>
+    <script>
+      (() => {
+        const params = new URLSearchParams(window.location.search);
+        const hasRequestedCourse = ["course", "lesson", "slug"].some((key) => params.get(key));
+        if (!hasRequestedCourse) return;
+
+        document.documentElement.classList.add("course-route-loading");
+
+        document.addEventListener("DOMContentLoaded", () => {
+          const app = document.querySelector("#app");
+          if (!app) {
+            document.documentElement.classList.remove("course-route-loading");
+            return;
+          }
+
+          app.setAttribute("aria-busy", "true");
+          let hasSeenInitialRender = false;
+
+          const revealCourse = () => {
+            app.removeAttribute("aria-busy");
+            document.documentElement.classList.remove("course-route-loading");
+            observer.disconnect();
+          };
+
+          const observer = new MutationObserver(() => {
+            if (!app.children.length) return;
+
+            if (!hasSeenInitialRender) {
+              hasSeenInitialRender = true;
+              return;
+            }
+
+            const cloudStatus = app.querySelector(".cloud-status-banner");
+            if (cloudStatus?.classList.contains("is-retrying")) return;
+
+            revealCourse();
+          });
+
+          observer.observe(app, { childList: true });
+        }, { once: true });
+      })();
+    </script>
   </head>
   <body>
     <div id="app" class="app-shell"></div>
