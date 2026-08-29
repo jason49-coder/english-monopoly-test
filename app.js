@@ -1800,6 +1800,8 @@ function renderWordEditorRow(item, index) {
 }
 
 function renderCsvPanel() {
+  const currentWordCount = Array.isArray(state.lesson?.words) ? state.lesson.words.length : 0;
+
   return `
     <div class="teacher-subhead lesson-section-head">
       <div>
@@ -1811,6 +1813,23 @@ function renderCsvPanel() {
     <div class="import-box">
       <label class="small-label" for="csvInput">貼上 CSV：英文單字, 中文提示</label>
       <textarea id="csvInput" placeholder="season,季節"></textarea>
+      <fieldset class="csv-import-mode">
+        <legend class="small-label">匯入方式</legend>
+        <label class="csv-import-option">
+          <input type="radio" name="csvImportMode" value="append" checked />
+          <span>
+            <strong>疊加到現有單字</strong>
+            <small>保留目前 ${currentWordCount} 筆，再接著加入 CSV 內容</small>
+          </span>
+        </label>
+        <label class="csv-import-option is-replace">
+          <input type="radio" name="csvImportMode" value="replace" />
+          <span>
+            <strong>清空後覆蓋</strong>
+            <small>移除目前全部單字，只保留這次 CSV 內容</small>
+          </span>
+        </label>
+      </fieldset>
       <div class="button-row">
         <button class="ghost-button" data-action="import-csv">匯入 CSV</button>
         <button class="ghost-button" data-action="clear-words">清空單字</button>
@@ -3886,6 +3905,9 @@ function clearWords() {
 
 function importCsv() {
   const textarea = document.querySelector("#csvInput");
+  const importMode = document.querySelector('input[name="csvImportMode"]:checked')?.value === "replace"
+    ? "replace"
+    : "append";
   const rows = parseCsv(textarea.value);
   if (!rows.length) {
     showToast("沒有可匯入的資料");
@@ -3897,7 +3919,7 @@ function importCsv() {
     .map((row) => row.map((cell) => cell.trim()))
     .filter((row) => row.some(Boolean));
 
-  const hasHeader = normalized[0] && normalized[0].some((cell) => /word|meaning|英文|中文|en|zh/i.test(cell));
+  const hasHeader = isCsvHeaderRow(normalized[0]);
   const dataRows = hasHeader ? normalized.slice(1) : normalized;
   const hasExtraColumns = dataRows.some((row) => row.length > 2);
   const words = dataRows
@@ -3910,11 +3932,7 @@ function importCsv() {
     return;
   }
 
-  if (hasExtraColumns) {
-    showToast("CSV 格式已更新，只取前兩欄（英文、中文），分類與例句已略過");
-  }
-
-  state.lesson.words = words;
+  state.lesson.words = combineImportedWords(state.lesson.words, words, importMode);
   state.game = freshGameState({
     teams: state.game.teams,
     wordCount: getLessonWords().length,
@@ -3926,9 +3944,24 @@ function importCsv() {
     imageMode: state.memory?.imageMode,
   });
   textarea.value = "";
-  showToast(`已匯入 ${words.length} 個單字`);
+  const extraColumnNote = hasExtraColumns ? "（已忽略第三欄以後的內容）" : "";
+  showToast(importMode === "replace"
+    ? `已清空並匯入 ${words.length} 個單字${extraColumnNote}`
+    : `已疊加 ${words.length} 個單字，目前共 ${state.lesson.words.length} 個${extraColumnNote}`);
   scheduleCourseAutosave();
   render();
+}
+
+function isCsvHeaderRow(row) {
+  if (!Array.isArray(row)) return false;
+  const headerLabels = new Set(["word", "words", "meaning", "meanings", "英文", "英文單字", "中文", "中文提示", "en", "zh"]);
+  return row.slice(0, 2).some((cell) => headerLabels.has(String(cell || "").trim().toLowerCase()));
+}
+
+function combineImportedWords(existingWords, importedWords, importMode) {
+  const current = Array.isArray(existingWords) ? existingWords : [];
+  const incoming = Array.isArray(importedWords) ? importedWords : [];
+  return importMode === "replace" ? [...incoming] : [...current, ...incoming];
 }
 
 function exportCsv() {

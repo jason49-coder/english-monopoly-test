@@ -2535,6 +2535,78 @@ input[readonly] {
   gap: 8px;
 }
 
+.csv-import-mode {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 4px 0 2px;
+  padding: 0;
+  border: 0;
+}
+
+.csv-import-mode legend {
+  grid-column: 1 / -1;
+  margin-bottom: 6px;
+  padding: 0;
+}
+
+.csv-import-option {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px;
+  border: 2px solid rgba(19, 139, 132, 0.16);
+  border-radius: 12px;
+  background: rgba(238, 250, 255, 0.72);
+  cursor: pointer;
+}
+
+.csv-import-option:has(input:checked) {
+  border-color: rgba(19, 139, 132, 0.72);
+  background: rgba(210, 248, 240, 0.82);
+  box-shadow: 0 0 0 3px rgba(19, 139, 132, 0.08);
+}
+
+.csv-import-option.is-replace {
+  border-color: rgba(232, 86, 72, 0.16);
+  background: rgba(255, 241, 239, 0.72);
+}
+
+.csv-import-option.is-replace:has(input:checked) {
+  border-color: rgba(180, 41, 32, 0.58);
+  background: rgba(255, 225, 221, 0.82);
+  box-shadow: 0 0 0 3px rgba(180, 41, 32, 0.07);
+}
+
+.csv-import-option input {
+  width: 18px;
+  min-height: 18px;
+  margin: 2px 0 0;
+  accent-color: var(--teal);
+}
+
+.csv-import-option.is-replace input {
+  accent-color: #b42920;
+}
+
+.csv-import-option span {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.csv-import-option strong {
+  font-size: 0.92rem;
+}
+
+.csv-import-option small {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
 .toast {
   position: fixed;
   right: 18px;
@@ -3206,6 +3278,10 @@ input[readonly] {
   }
 
   .checks {
+    grid-template-columns: 1fr;
+  }
+
+  .csv-import-mode {
     grid-template-columns: 1fr;
   }
 
