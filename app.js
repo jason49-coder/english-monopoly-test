@@ -106,6 +106,7 @@ let supabaseClient = null;
 let supabaseScriptPromise = null;
 let cloudCourseLibrary = [];
 let teacherAccessUnlocked = false;
+let teacherAutoLoginPending = false;
 const cloudSave = {
   saving: false,
   verifying: false,
@@ -152,6 +153,7 @@ const gameCatalog = {
 };
 applyRouteView();
 ensureGameShape();
+teacherAutoLoginPending = state.view === "teacher" && Boolean(getTeacherWriteToken());
 
 function loadState() {
   try {
@@ -1049,7 +1051,9 @@ function renderTopbar() {
   const teacherLocked = state.view === "teacher" && !isTeacherUnlocked();
   const teacherTokenRemembered = teacherLocked && Boolean(getTeacherWriteToken());
   const title = teacherLocked ? "老師後台" : state.lesson.name || "兒童美語大富翁";
-  const meta = teacherLocked
+  const meta = teacherAutoLoginPending
+    ? "正在安全登入…"
+    : teacherLocked
     ? (teacherTokenRemembered ? "已記住密碼，可直接進入" : "請輸入老師密碼")
     : `${getLessonWords().length} words · ${state.game.teams.length} teams · Round ${state.game.round}`;
 
@@ -1602,6 +1606,10 @@ function renderTeamRow(team, index) {
 }
 
 function renderTeacher() {
+  if (teacherAutoLoginPending) {
+    return renderTeacherAutoLogin();
+  }
+
   if (!isTeacherUnlocked()) {
     return renderTeacherAuthGate();
   }
@@ -1658,6 +1666,21 @@ function renderTeacher() {
         ${renderWordEditor()}
         ${renderCsvPanel()}
       </section>
+    </section>
+  `;
+}
+
+function renderTeacherAutoLogin() {
+  return `
+    <section class="teacher-auto-login" aria-busy="true" aria-live="polite">
+      <div class="teacher-auto-login-mark" aria-hidden="true">
+        <span>A</span><span>B</span><span>C</span>
+      </div>
+      <div>
+        <h2>正在開啟老師後台</h2>
+        <p>正在確認這台裝置的登入權限與同步課程資料…</p>
+      </div>
+      <span class="teacher-auto-login-spinner" aria-hidden="true"></span>
     </section>
   `;
 }
@@ -3240,10 +3263,11 @@ async function verifyTeacherWriteToken() {
     return false;
   }
 
+  const isAutomaticLogin = teacherAutoLoginPending;
   cloudSave.verifying = true;
   cloudSave.tokenStatus = "pending";
   cloudSave.tokenMessage = "";
-  showToast("正在驗證寫入密碼");
+  if (!isAutomaticLogin) showToast("正在驗證寫入密碼");
   render();
 
   try {
@@ -3256,7 +3280,7 @@ async function verifyTeacherWriteToken() {
     storeTeacherWriteToken(token);
     cloudSave.tokenStatus = "verified";
     cloudSave.tokenMessage = "密碼正確，可以寫入 Supabase。";
-    showToast("寫入密碼已驗證");
+    if (!isAutomaticLogin) showToast("寫入密碼已驗證");
     await syncCloudCourseLibrary();
     return true;
   } catch (error) {
@@ -3274,6 +3298,7 @@ async function verifyTeacherWriteToken() {
     }
     return false;
   } finally {
+    teacherAutoLoginPending = false;
     cloudSave.verifying = false;
     render();
   }
