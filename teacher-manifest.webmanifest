@@ -1,0 +1,11 @@
+{
+  "id": "./teacher/",
+  "name": "兒童美語大富翁｜老師後台",
+  "short_name": "大富翁後台",
+  "start_url": "./teacher/",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f8fafc",
+  "theme_color": "#0f766e",
+  "lang": "zh-Hant"
+}

@@ -1,0 +1,11 @@
+{
+  "id": "./index.html",
+  "name": "兒童美語大富翁",
+  "short_name": "美語大富翁",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f8fafc",
+  "theme_color": "#0f766e",
+  "lang": "zh-Hant"
+}
