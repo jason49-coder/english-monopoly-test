@@ -1708,7 +1708,7 @@ function renderTeacherAuthGate() {
           <div class="teacher-auth-remembered" role="status">
             <span class="teacher-auth-status-dot" aria-hidden="true"></span>
             <div>
-              <strong>本分頁已記住密碼</strong>
+              <strong>這台裝置已記住密碼</strong>
               <span>進入前會重新確認權限。</span>
             </div>
           </div>
@@ -1731,7 +1731,7 @@ function renderTeacherAuthGate() {
         <div class="teacher-auth-copy">
           <div class="section-kicker">${token ? "登入狀態" : "老師後台"}</div>
           <h2>${token ? "可以直接進入後台" : "輸入密碼進入"}</h2>
-          <p>${token ? "這個分頁已保存老師密碼，不需要重新輸入。按下進入時，系統會先確認密碼仍然有效。" : "後台課程只會讀寫 Supabase 雲端資料。密碼通過後才能編輯、刪除或同步課程。"}</p>
+          <p>${token ? "這台裝置已保存老師密碼，下次開啟會自動驗證並進入。若是共用裝置，使用完請按「登出後台」。" : "後台課程只會讀寫 Supabase 雲端資料。密碼通過後才能編輯、刪除或同步課程。"}</p>
         </div>
         ${authControl}
         <div class="teacher-auth-footer ${showStatus ? "" : "is-action-only"}">
@@ -3253,6 +3253,7 @@ async function verifyTeacherWriteToken() {
     }
 
     teacherAccessUnlocked = true;
+    storeTeacherWriteToken(token);
     cloudSave.tokenStatus = "verified";
     cloudSave.tokenMessage = "密碼正確，可以寫入 Supabase。";
     showToast("寫入密碼已驗證");
@@ -3304,6 +3305,13 @@ function isTeacherTokenError(error) {
 
 function getTeacherWriteToken() {
   try {
+    const rememberedToken = localStorage.getItem(TEACHER_WRITE_TOKEN_KEY);
+    if (rememberedToken) return rememberedToken;
+  } catch (error) {
+    console.warn("Unable to read remembered teacher write token", error);
+  }
+
+  try {
     return sessionStorage.getItem(TEACHER_WRITE_TOKEN_KEY) || "";
   } catch (error) {
     return "";
@@ -3312,17 +3320,31 @@ function getTeacherWriteToken() {
 
 function storeTeacherWriteToken(token) {
   try {
+    localStorage.setItem(TEACHER_WRITE_TOKEN_KEY, token);
+    sessionStorage.removeItem(TEACHER_WRITE_TOKEN_KEY);
+    return;
+  } catch (error) {
+    console.warn("Unable to remember teacher write token", error);
+  }
+
+  try {
     sessionStorage.setItem(TEACHER_WRITE_TOKEN_KEY, token);
   } catch (error) {
-    console.warn("Unable to store teacher write token", error);
+    console.warn("Unable to store teacher write token for this session", error);
   }
 }
 
 function clearTeacherWriteToken() {
   try {
+    localStorage.removeItem(TEACHER_WRITE_TOKEN_KEY);
+  } catch (error) {
+    console.warn("Unable to clear remembered teacher write token", error);
+  }
+
+  try {
     sessionStorage.removeItem(TEACHER_WRITE_TOKEN_KEY);
   } catch (error) {
-    console.warn("Unable to clear teacher write token", error);
+    console.warn("Unable to clear session teacher write token", error);
   }
   teacherAccessUnlocked = false;
 }
@@ -4187,4 +4209,8 @@ window.addEventListener("resize", () => {
 });
 
 render();
-syncCloudCourseLibrary();
+if (state.view === "teacher" && getTeacherWriteToken()) {
+  verifyTeacherWriteToken();
+} else {
+  syncCloudCourseLibrary();
+}
