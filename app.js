@@ -10,6 +10,14 @@ const COURSE_AUTOSAVE_DELAY = 3200;
 const CLOUD_SYNC_MAX_ATTEMPTS = 8;
 const CLOUD_SYNC_RETRY_DELAY = 8000;
 
+function cloneData(value) {
+  if (typeof structuredClone === "function") {
+    return structuredClone(value);
+  }
+
+  return JSON.parse(JSON.stringify(value));
+}
+
 const taskLabels = {
   say: "Read the word",
   sentence: "Make a sentence",
@@ -159,7 +167,7 @@ function loadState() {
     view: "game",
     chromeCollapsed: true,
     activeGame: "hub",
-    lesson: structuredClone(defaultLesson),
+    lesson: cloneData(defaultLesson),
     courseEditor: freshCourseEditorState("new"),
     game: freshGameState(),
     memory: null,
@@ -212,7 +220,7 @@ function freshMemoryState(options = {}) {
 }
 
 function resetTeams(teams) {
-  return structuredClone(teams).map((team, index) => ({
+  return cloneData(teams).map((team, index) => ({
     id: team.id || `team-${index + 1}`,
     name: normalizeTeamName(team.name, index),
     color: team.color || teamColors[index % teamColors.length],
@@ -550,6 +558,7 @@ async function syncCloudCourseLibrary(attempt = 1) {
     saveCourseLibrary(cloudCourses);
     if (!cloudCourses.length) {
       render();
+      finishCourseRouteLoading();
       return;
     }
 
@@ -565,6 +574,7 @@ async function syncCloudCourseLibrary(attempt = 1) {
       showToast(`已從雲端載入課程：${loadedCourseName}`);
     }
     render();
+    finishCourseRouteLoading();
   } catch (error) {
     console.warn("Unable to load Supabase courses.", error);
     if (attempt < CLOUD_SYNC_MAX_ATTEMPTS) {
@@ -581,6 +591,13 @@ async function syncCloudCourseLibrary(attempt = 1) {
     cloudSync.message = "雲端資料庫暫時無法連線，請稍後重新整理。";
     saveCourseLibrary([]);
     render();
+    finishCourseRouteLoading();
+  }
+}
+
+function finishCourseRouteLoading() {
+  if (typeof window.revealCourseRoute === "function") {
+    window.revealCourseRoute();
   }
 }
 
@@ -3700,7 +3717,7 @@ function resetMemoryGame() {
 
 function loadDemo() {
   cancelCourseAutosave();
-  const lesson = structuredClone(defaultLesson);
+  const lesson = cloneData(defaultLesson);
   lesson.slug = createUniqueCourseSlug(`${lesson.slug}-demo`);
   lesson.name = createUniqueCourseName(lesson.name);
   setActiveLesson(lesson);

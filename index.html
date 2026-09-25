@@ -31,37 +31,38 @@
 
         document.documentElement.classList.add("course-route-loading");
 
+        const fallbackTimer = window.setTimeout(() => {
+          const app = document.querySelector("#app");
+          document.documentElement.classList.remove("course-route-loading");
+          if (app) app.removeAttribute("aria-busy");
+          if (app && !app.children.length) {
+            app.innerHTML = `
+              <main style="max-width: 36rem; margin: 4rem auto; padding: 1.5rem; text-align: center; font-family: system-ui, sans-serif;">
+                <h1 style="font-size: 1.25rem;">課程暫時無法載入</h1>
+                <p style="color: #64748b;">請更新平板系統或重新整理頁面後再試一次。</p>
+                <button type="button" onclick="window.location.reload()" style="padding: .75rem 1rem; border: 0; border-radius: .75rem; color: white; background: #0f766e; font-weight: 700;">重新整理</button>
+              </main>
+            `;
+          }
+        }, 12000);
+
+        window.revealCourseRoute = () => {
+          window.clearTimeout(fallbackTimer);
+          const app = document.querySelector("#app");
+          if (app) app.removeAttribute("aria-busy");
+          document.documentElement.classList.remove("course-route-loading");
+        };
+
         document.addEventListener("DOMContentLoaded", () => {
           const app = document.querySelector("#app");
           if (!app) {
-            document.documentElement.classList.remove("course-route-loading");
+            window.revealCourseRoute();
             return;
           }
 
-          app.setAttribute("aria-busy", "true");
-          let hasSeenInitialRender = false;
-
-          const revealCourse = () => {
-            app.removeAttribute("aria-busy");
-            document.documentElement.classList.remove("course-route-loading");
-            observer.disconnect();
-          };
-
-          const observer = new MutationObserver(() => {
-            if (!app.children.length) return;
-
-            if (!hasSeenInitialRender) {
-              hasSeenInitialRender = true;
-              return;
-            }
-
-            const cloudStatus = app.querySelector(".cloud-status-banner");
-            if (cloudStatus?.classList.contains("is-retrying")) return;
-
-            revealCourse();
-          });
-
-          observer.observe(app, { childList: true });
+          if (document.documentElement.classList.contains("course-route-loading")) {
+            app.setAttribute("aria-busy", "true");
+          }
         }, { once: true });
       })();
     </script>
@@ -69,6 +70,6 @@
   <body>
     <div id="app" class="app-shell"></div>
     <script src="https://cdn.jsdelivr.net/npm/party-js@2/bundle/party.min.js"></script>
-    <script src="app.js?v=20260830-1" defer></script>
+    <script src="app.js?v=20260925-1" defer></script>
   </body>
 </html>
