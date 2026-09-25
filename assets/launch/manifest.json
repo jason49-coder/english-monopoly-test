@@ -1,0 +1,24 @@
+{
+  "source": "../icons/app-icon-1024.png",
+  "source_sha256": "40a721f56efbda3c7efecdc1be42a7ad6eb5f08d2739b27a0736aed288a90eae",
+  "background_color": "#0f766e",
+  "logo_scale_of_short_edge": 0.32,
+  "exports": [
+    { "width": 2064, "height": 2752, "device_width": 1032, "device_height": 1376, "orientation": "portrait" },
+    { "width": 2752, "height": 2064, "device_width": 1032, "device_height": 1376, "orientation": "landscape" },
+    { "width": 2048, "height": 2732, "device_width": 1024, "device_height": 1366, "orientation": "portrait" },
+    { "width": 2732, "height": 2048, "device_width": 1024, "device_height": 1366, "orientation": "landscape" },
+    { "width": 1668, "height": 2420, "device_width": 834, "device_height": 1210, "orientation": "portrait" },
+    { "width": 2420, "height": 1668, "device_width": 834, "device_height": 1210, "orientation": "landscape" },
+    { "width": 1668, "height": 2388, "device_width": 834, "device_height": 1194, "orientation": "portrait" },
+    { "width": 2388, "height": 1668, "device_width": 834, "device_height": 1194, "orientation": "landscape" },
+    { "width": 1640, "height": 2360, "device_width": 820, "device_height": 1180, "orientation": "portrait" },
+    { "width": 2360, "height": 1640, "device_width": 820, "device_height": 1180, "orientation": "landscape" },
+    { "width": 1620, "height": 2160, "device_width": 810, "device_height": 1080, "orientation": "portrait" },
+    { "width": 2160, "height": 1620, "device_width": 810, "device_height": 1080, "orientation": "landscape" },
+    { "width": 1536, "height": 2048, "device_width": 768, "device_height": 1024, "orientation": "portrait" },
+    { "width": 2048, "height": 1536, "device_width": 768, "device_height": 1024, "orientation": "landscape" },
+    { "width": 1488, "height": 2266, "device_width": 744, "device_height": 1133, "orientation": "portrait" },
+    { "width": 2266, "height": 1488, "device_width": 744, "device_height": 1133, "orientation": "landscape" }
+  ]
+}
