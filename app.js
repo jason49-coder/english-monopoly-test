@@ -1,6 +1,7 @@
 const STORAGE_KEY = "english-monopoly-mvp-v1";
 const COURSE_LIBRARY_KEY = "english-monopoly-course-library-v1";
-const TEACHER_WRITE_TOKEN_KEY = "english-monopoly-teacher-write-token-v1";
+const LEGACY_TEACHER_WRITE_TOKEN_KEY = "english-monopoly-teacher-write-token-v1";
+const TEACHER_WRITE_TOKEN_KEY = "english-monopoly-teacher-write-token-v2";
 const SUPABASE_PUBLIC_CONFIG = {
   url: "https://ybbttuzmwfxwigllfxda.supabase.co",
   anonKey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InliYnR0dXptd2Z4d2lnbGxmeGRhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA1ODgwMzQsImV4cCI6MjA5NjE2NDAzNH0.WtcBOa22ZecFStci2uo7hG1bk0mU6YEbiqAsMtzOyiA",
@@ -107,6 +108,9 @@ let supabaseScriptPromise = null;
 let cloudCourseLibrary = [];
 let teacherAccessUnlocked = false;
 let teacherAutoLoginPending = false;
+let teacherWriteToken = "";
+let teacherRememberLogin = false;
+let teacherTokenRemembered = false;
 const cloudSave = {
   saving: false,
   verifying: false,
@@ -153,6 +157,7 @@ const gameCatalog = {
 };
 applyRouteView();
 ensureGameShape();
+restoreTeacherWriteToken();
 teacherAutoLoginPending = state.view === "teacher" && Boolean(getTeacherWriteToken());
 
 function loadState() {
@@ -1049,7 +1054,6 @@ function renderTopbar() {
   const actions = state.view === "teacher" ? renderTeacherTopbarActions(busy) : renderGameTopbarActions(busy);
   const gameCompact = state.view === "game" && isActiveGameStarted();
   const teacherLocked = state.view === "teacher" && !isTeacherUnlocked();
-  const teacherTokenRemembered = teacherLocked && Boolean(getTeacherWriteToken());
   const title = teacherLocked ? "老師後台" : state.lesson.name || "兒童美語大富翁";
   const meta = teacherAutoLoginPending
     ? "正在安全登入…"
@@ -1719,19 +1723,20 @@ function renderTeacherAuthGate() {
   const token = getTeacherWriteToken();
   const verifying = cloudSave.verifying;
   const status = getTeacherWriteTokenStatus();
-  const authMode = token ? "is-remembered" : "is-password";
-  const showStatus = !token
+  const remembered = teacherTokenRemembered && Boolean(token);
+  const authMode = remembered ? "is-remembered" : "is-password";
+  const showStatus = !remembered
     || verifying
     || cloudSave.tokenStatus === "pending"
     || cloudSave.tokenStatus === "invalid"
     || cloudSave.tokenStatus === "error";
-  const authControl = token
+  const authControl = remembered
     ? `
         <div class="teacher-auth-state">
           <div class="teacher-auth-remembered" role="status">
             <span class="teacher-auth-status-dot" aria-hidden="true"></span>
             <div>
-              <strong>這台裝置已記住密碼</strong>
+              <strong>這台裝置已記住登入</strong>
               <span>進入前會重新確認權限。</span>
             </div>
           </div>
@@ -1742,9 +1747,16 @@ function renderTeacherAuthGate() {
         </div>
       `
     : `
-        <div class="cloud-token-row teacher-auth-row">
-          <input id="teacherWriteToken" type="password" data-action="teacher-token-input" placeholder="輸入老師寫入密碼" autocomplete="current-password" ${verifying ? "disabled" : ""} />
-          <button class="primary-button" type="button" data-action="verify-teacher-token" ${verifying ? "disabled" : "disabled"}>${verifying ? "驗證中" : "進入後台"}</button>
+        <div class="teacher-auth-state">
+          <div class="cloud-token-row teacher-auth-row">
+            <input id="teacherWriteToken" type="password" data-action="teacher-token-input" aria-label="老師密碼" placeholder="輸入老師寫入密碼" autocomplete="current-password" value="${escapeHtml(token)}" ${verifying ? "disabled" : ""} />
+            <button class="primary-button" type="button" data-action="verify-teacher-token" ${verifying || !token ? "disabled" : ""}>${verifying ? "驗證中" : "進入後台"}</button>
+          </div>
+          <label class="teacher-remember-option">
+            <input type="checkbox" data-action="remember-teacher-login" aria-describedby="teacherRememberHint" ${teacherRememberLogin ? "checked" : ""} ${verifying ? "disabled" : ""} />
+            <span>在這台裝置記住登入</span>
+          </label>
+          <p id="teacherRememberHint" class="teacher-remember-hint">勾選後，下次開啟會自動登入。共用裝置請勿勾選；登出後會清除記錄。</p>
         </div>
       `;
 
@@ -1752,9 +1764,9 @@ function renderTeacherAuthGate() {
     <section class="teacher-auth-layout ${authMode}">
       <div class="teacher-auth-panel ${authMode}">
         <div class="teacher-auth-copy">
-          <div class="section-kicker">${token ? "登入狀態" : "老師後台"}</div>
-          <h2>${token ? "可以直接進入後台" : "輸入密碼進入"}</h2>
-          <p>${token ? "這台裝置已保存老師密碼，下次開啟會自動驗證並進入。若是共用裝置，使用完請按「登出後台」。" : "後台課程只會讀寫 Supabase 雲端資料。密碼通過後才能編輯、刪除或同步課程。"}</p>
+          <div class="section-kicker">${remembered ? "登入狀態" : "老師後台"}</div>
+          <h2>${remembered ? "可以直接進入後台" : "輸入密碼進入"}</h2>
+          <p>${remembered ? "你已選擇在這台裝置記住登入，下次開啟會自動驗證並進入。使用完可按「登出後台」清除記錄。" : "預設每次開啟或重新整理都需要輸入密碼。驗證通過後即可管理課程。"}</p>
         </div>
         ${authControl}
         <div class="teacher-auth-footer ${showStatus ? "" : "is-action-only"}">
@@ -2110,6 +2122,10 @@ function getTeacherWriteTokenStatus() {
     return { className: "is-muted", message: "正在寫入 Supabase。" };
   }
 
+  if (cloudSave.tokenStatus === "invalid") {
+    return { className: "is-error", message: cloudSave.tokenMessage || "寫入密碼錯誤，請重新輸入。" };
+  }
+
   const token = getTeacherWriteToken();
   if (!token) {
     return { className: "is-muted", message: "尚未輸入寫入密碼；課程只會寫入 Supabase，不再建立本機課程。" };
@@ -2123,10 +2139,6 @@ function getTeacherWriteTokenStatus() {
     return { className: "is-ok", message: cloudSave.tokenMessage || "已同步到 Supabase。" };
   }
 
-  if (cloudSave.tokenStatus === "invalid") {
-    return { className: "is-error", message: cloudSave.tokenMessage || "寫入密碼錯誤，請重新輸入。" };
-  }
-
   if (cloudSave.tokenStatus === "error") {
     return { className: "is-error", message: cloudSave.tokenMessage || "驗證失敗，請稍後再試。" };
   }
@@ -2135,7 +2147,7 @@ function getTeacherWriteTokenStatus() {
     return { className: "is-muted", message: cloudSave.tokenMessage || "尚未完成登入，請重新進入後台。" };
   }
 
-  return { className: "is-muted", message: "本分頁已記住密碼，可以直接進入後台。" };
+  return { className: "is-muted", message: teacherTokenRemembered ? "這台裝置已記住登入，可以直接進入後台。" : "請按「進入後台」完成登入。" };
 }
 
 function renderSavedCourse(course, index = 0, courseCount = 1) {
@@ -3221,12 +3233,11 @@ async function parseSupabaseResponse(response) {
 function updateTeacherTokenInput(target) {
   const normalized = String(target.value || "").trim();
   teacherAccessUnlocked = false;
+  teacherWriteToken = normalized;
   if (normalized) {
-    storeTeacherWriteToken(normalized);
     cloudSave.tokenStatus = "pending";
     cloudSave.tokenMessage = "請按「進入後台」完成登入。";
   } else {
-    clearTeacherWriteToken();
     cloudSave.tokenStatus = "empty";
     cloudSave.tokenMessage = "";
   }
@@ -3277,10 +3288,14 @@ async function verifyTeacherWriteToken() {
     }
 
     teacherAccessUnlocked = true;
-    storeTeacherWriteToken(token);
+    const remembered = storeTeacherWriteToken(token);
     cloudSave.tokenStatus = "verified";
     cloudSave.tokenMessage = "密碼正確，可以寫入 Supabase。";
-    if (!isAutomaticLogin) showToast("寫入密碼已驗證");
+    if (teacherRememberLogin && !remembered) {
+      showToast("已登入，但瀏覽器無法記住登入，下次仍需輸入密碼");
+    } else if (!isAutomaticLogin) {
+      showToast("寫入密碼已驗證");
+    }
     await syncCloudCourseLibrary();
     return true;
   } catch (error) {
@@ -3329,37 +3344,50 @@ function isTeacherTokenError(error) {
 }
 
 function getTeacherWriteToken() {
+  return teacherWriteToken;
+}
+
+function restoreTeacherWriteToken() {
+  // Old versions saved credentials without asking. Require a fresh opt-in.
   try {
-    const rememberedToken = localStorage.getItem(TEACHER_WRITE_TOKEN_KEY);
-    if (rememberedToken) return rememberedToken;
+    localStorage.removeItem(LEGACY_TEACHER_WRITE_TOKEN_KEY);
+  } catch (error) {
+    console.warn("Unable to clear legacy teacher write token", error);
+  }
+  try {
+    sessionStorage.removeItem(LEGACY_TEACHER_WRITE_TOKEN_KEY);
+  } catch (error) {
+    console.warn("Unable to clear legacy session teacher write token", error);
+  }
+  try {
+    teacherWriteToken = localStorage.getItem(TEACHER_WRITE_TOKEN_KEY) || "";
+    teacherTokenRemembered = Boolean(teacherWriteToken);
+    teacherRememberLogin = teacherTokenRemembered;
   } catch (error) {
     console.warn("Unable to read remembered teacher write token", error);
-  }
-
-  try {
-    return sessionStorage.getItem(TEACHER_WRITE_TOKEN_KEY) || "";
-  } catch (error) {
-    return "";
   }
 }
 
 function storeTeacherWriteToken(token) {
+  teacherWriteToken = token;
+  teacherTokenRemembered = false;
   try {
-    localStorage.setItem(TEACHER_WRITE_TOKEN_KEY, token);
-    sessionStorage.removeItem(TEACHER_WRITE_TOKEN_KEY);
-    return;
+    if (teacherRememberLogin) {
+      localStorage.setItem(TEACHER_WRITE_TOKEN_KEY, token);
+      teacherTokenRemembered = true;
+    } else {
+      localStorage.removeItem(TEACHER_WRITE_TOKEN_KEY);
+    }
   } catch (error) {
     console.warn("Unable to remember teacher write token", error);
   }
-
-  try {
-    sessionStorage.setItem(TEACHER_WRITE_TOKEN_KEY, token);
-  } catch (error) {
-    console.warn("Unable to store teacher write token for this session", error);
-  }
+  return teacherTokenRemembered;
 }
 
 function clearTeacherWriteToken() {
+  teacherWriteToken = "";
+  teacherTokenRemembered = false;
+  teacherRememberLogin = false;
   try {
     localStorage.removeItem(TEACHER_WRITE_TOKEN_KEY);
   } catch (error) {
@@ -4200,6 +4228,9 @@ document.addEventListener("input", (event) => {
 
 document.addEventListener("change", (event) => {
   const target = event.target;
+  if (target.dataset.action === "remember-teacher-login") {
+    teacherRememberLogin = target.checked;
+  }
   if (target.dataset.action === "toggle-lesson-task") {
     toggleLessonTask(target);
   }

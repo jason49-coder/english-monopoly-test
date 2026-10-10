@@ -4,7 +4,8 @@
   "private": true,
   "type": "commonjs",
   "scripts": {
-    "check:js": "node --check app.js"
+    "check:js": "node --check app.js",
+    "test:teacher-login": "playwright test tests/teacher-login.spec.js --workers=1 --reporter=line --output=.tools/test-results"
   },
   "devDependencies": {
     "@playwright/test": "^1.61.1"
